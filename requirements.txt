@@ -1,0 +1,35 @@
+# ─────────────────────────────────────────────────────────
+# Clinical Digital Twin — requirements.txt
+# Python 3.9+
+# ─────────────────────────────────────────────────────────
+
+# Core data stack
+pandas>=2.2.0
+numpy>=1.26.0
+pyarrow>=14.0.0
+
+# Machine learning / statistics
+scikit-learn>=1.5.0
+scipy>=1.13.0
+
+# Visualisation
+matplotlib>=3.9.0
+seaborn>=0.13.0
+plotly>=5.22.0
+kaleido>=0.2.1
+
+# NLP / text
+nltk>=3.9.0
+wordcloud>=1.9.3
+textstat>=0.7.3
+
+# Utilities
+tqdm>=4.67.0
+rich>=15.0.0
+PyYAML>=6.0.1
+tabulate>=0.9.0
+
+# Notebook support
+jupyter>=1.0.0
+nbformat>=5.10.0
+ipywidgets>=8.1.0
