@@ -129,10 +129,7 @@ tables:
     date_cols:
     - starttime
     - stoptime
-    id_cols:
-    - subject_id
-    - hadm_id
-    - pharmacy_id
+    id_cols: []
     cat_cols:
     - drug_type
     - drug

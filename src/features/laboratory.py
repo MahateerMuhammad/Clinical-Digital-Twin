@@ -88,6 +88,11 @@ def build_lab_features_from_df(labevents: pd.DataFrame) -> pd.DataFrame:
                 reverse_key_labs[item_id] = k
         else:
             reverse_key_labs[v] = k
+    
+    # Fast filter: drop non-key lab items before running groupby
+    if "itemid" in labs.columns:
+        labs = labs[labs["itemid"].isin(reverse_key_labs.keys())]
+
     records = {}
     for (hadm_id, itemid), subset in labs.groupby(["hadm_id", "itemid"], observed=True):
         if hadm_id not in records:

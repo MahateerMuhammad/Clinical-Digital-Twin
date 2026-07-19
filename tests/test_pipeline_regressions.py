@@ -140,3 +140,25 @@ def test_vectorized_vs_original_lab_features(tables):
     row_2003 = features[features["hadm_id"] == 2003].iloc[0]
     assert row_2003["lab_glucose_change"] == 100.0
     assert row_2003["lab_glucose_slope"] > 0
+
+# 12. test_medication_duration_and_duplicate_handling
+def test_medication_duration_and_duplicate_handling():
+    from src.features.medication import build_medication_features
+    df = pd.DataFrame({
+        "hadm_id": [101, 101, 101, 102],
+        "pharmacy_id": [1, 2, 3, 4],
+        "drug": ["Aspirin", "Aspirin", "Heparin", "Insulin"],
+        "starttime": ["2026-01-01 10:00:00", "2026-01-01 10:00:00", "2026-01-01 12:00:00", "2026-01-01 10:00:00"],
+        "stoptime": ["2026-01-01 14:00:00", "2026-01-01 08:00:00", "2026-01-01 16:00:00", "2026-01-01 12:00:00"],
+        "_is_duplicate": [0, 1, 0, 0],
+        "_invalid_time_order": [0, 1, 0, 0],
+    })
+    res = build_medication_features(df)
+    
+    # Duplicate row (_is_duplicate=1) for hadm 101 should be ignored (medication count = 2, not 3)
+    row_101 = res[res["hadm_id"] == 101].iloc[0]
+    assert row_101["medication_count"] == 2, f"Expected medication_count=2, got {row_101['medication_count']}"
+    
+    # Valid durations for 101: 4 hours and 4 hours -> mean should be 4.0 (ignoring negative duration)
+    assert row_101["med_duration_hours_mean"] == 4.0, f"Expected duration mean=4.0, got {row_101['med_duration_hours_mean']}"
+

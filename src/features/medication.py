@@ -38,6 +38,8 @@ def build_medication_features(prescriptions: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=["hadm_id"])
 
     rx = prescriptions.copy()
+    if "_is_duplicate" in rx.columns:
+        rx = rx[rx["_is_duplicate"] == 0]
     if "starttime" in rx.columns:
         rx["starttime"] = pd.to_datetime(rx["starttime"], errors="coerce")
     if "stoptime" in rx.columns:
@@ -46,6 +48,9 @@ def build_medication_features(prescriptions: pd.DataFrame) -> pd.DataFrame:
     durations = (rx["stoptime"] - rx["starttime"]).dt.total_seconds() / 3600.0 if "starttime" in rx.columns and "stoptime" in rx.columns else None
     if durations is not None:
         rx["_duration_hours"] = durations
+        if "_invalid_time_order" in rx.columns:
+            rx.loc[rx["_invalid_time_order"] == 1, "_duration_hours"] = np.nan
+        rx.loc[rx["_duration_hours"] < 0, "_duration_hours"] = np.nan
 
     agg_dict = {
         "pharmacy_id": ["count"],
@@ -62,13 +67,13 @@ def build_medication_features(prescriptions: pd.DataFrame) -> pd.DataFrame:
             agg_dict[col] = ["max"]
 
     grouped = rx.groupby("hadm_id", observed=True).agg(agg_dict)
-    grouped.columns = ["_".join(c).strip("_") for c in grouped.columns]
+    grouped.columns = ["_".join(c).lstrip("_") for c in grouped.columns]
     
     rename_cols = {
         "pharmacy_id_count": "medication_count",
         "drug_nunique": "unique_medications",
-        "_duration_hours_mean": "med_duration_hours_mean",
-        "_duration_hours_max": "med_duration_hours_max",
+        "duration_hours_mean": "med_duration_hours_mean",
+        "duration_hours_max": "med_duration_hours_max",
     }
     for col in DRUG_CLASS_KEYWORDS.keys():
         rename_cols[f"{col}_max"] = col
