@@ -71,6 +71,18 @@ def build_charlson_flags(diagnoses: pd.DataFrame) -> pd.DataFrame:
         matched_hadm = dx.loc[mask, "hadm_id"].drop_duplicates()
         result[col] = result["hadm_id"].isin(matched_hadm).astype(np.int8)
 
+    # Enforce Charlson hierarchy: when the more-severe condition is present the
+    # milder one is not counted (standard Quan/Charlson rule). Without this the
+    # index is inflated for patients coded with both tiers.
+    _HIERARCHY = [
+        ("cci_severe_liver_disease", "cci_mild_liver_disease"),
+        ("cci_metastatic_tumor", "cci_malignancy"),
+        ("cci_diabetes_complicated", "cci_diabetes_uncomplicated"),
+    ]
+    for greater, lesser in _HIERARCHY:
+        if greater in result.columns and lesser in result.columns:
+            result.loc[result[greater] == 1, lesser] = 0
+
     cci_cols = [c for c in result.columns if c.startswith("cci_")]
     result["charlson_comorbidity_index"] = sum(
         result[c] * CHARLSON_WEIGHTS.get(c.replace("cci_", ""), 1) for c in cci_cols
@@ -123,7 +135,6 @@ def build_diagnosis_features(
         matched = dx.loc[mask, "hadm_id"].drop_duplicates()
         agg[flag] = agg["hadm_id"].isin(matched).astype(np.int8)
 
-    agg["icd_embedding_placeholder"] = ""
     log.info("Diagnosis features: %d admissions × %d features", len(agg), agg.shape[1])
     return agg
 
