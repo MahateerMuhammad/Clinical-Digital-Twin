@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from src.data.merger import TableMerger
+from src.features.interactions import build_interaction_features
 from src.features.feature_selection import (
     FeatureSelectionReport,
     generate_correlation_report,
@@ -57,6 +58,10 @@ class DatasetBuilder:
         }
 
         admission_df = self.merger.merge_admission_level(admissions, patients, hadm_features)
+        # Interaction terms (age×diabetes, creatinine×age, cci×age, …) — must run
+        # after the feature merge so the source columns exist. Previously these were
+        # only produced by an unused helper, so they never reached the datasets.
+        admission_df = build_interaction_features(admission_df)
         patient_df = self.merger.merge_patient_level(admission_df)
 
         icu_features = {}
@@ -177,7 +182,7 @@ class DatasetBuilder:
             fh.write(f"Generated: {datetime.utcnow().isoformat()}Z\n\n")
             fh.write("## Dataset Summary\n\n")
             fh.write(df_to_markdown(summary))
-            fh.write("\n\n## Feature Dictionary (sample)\n\n")
-            fh.write(df_to_markdown(dict_df.head(200)))
+            fh.write("\n\n## Feature Dictionary\n\n")
+            fh.write(df_to_markdown(dict_df))
 
         log.info("Documentation saved to reports/")

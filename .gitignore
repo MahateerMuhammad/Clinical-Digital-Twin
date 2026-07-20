@@ -24,6 +24,8 @@ Thumbs.db
 
 # Project specific: Data and Logs
 # NEVER push data to the repository
+- data/
++ /data/
 data/
 logs/
 *.parquet
