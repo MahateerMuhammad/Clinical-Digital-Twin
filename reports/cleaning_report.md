@@ -1,6 +1,6 @@
 # Data Cleaning Report
 
-Generated: 2026-07-19T14:28:35.581605Z
+Generated: 2026-07-19T19:35:01.814489Z
 
 ## Summary
 
@@ -18,7 +18,7 @@ Generated: 2026-07-19T14:28:35.581605Z
 | icustays         |           2 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/icustays_clean.parquet         |         94458 |        94458 |            0 |           0 |
 | d_items          |           4 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/d_items_clean.parquet          |          4095 |         4095 |            0 |           0 |
 | labevents        |          13 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/labevents_clean.parquet        |      50390218 |     50390218 |            0 |           0 |
-| prescriptions    |          25 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/prescriptions_clean.parquet    |      20292611 |     20292611 |            0 |            0 |
+| prescriptions    |          24 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/prescriptions_clean.parquet    |      20292611 |     20292611 |            0 |           0 |
 | pharmacy         |          30 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/pharmacy_clean.parquet         |      17847567 |     17847567 |            0 |           0 |
 | emar             |          10 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/emar_clean.parquet             |      42808593 |     42808593 |            0 |           0 |
 | emar_detail      |          34 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/emar_detail_clean.parquet      |      87371064 |     87371064 |         4861 |        4861 |
@@ -86,7 +86,6 @@ Generated: 2026-07-19T14:28:35.581605Z
 | prescriptions | document_missing        | form_unit_disp                       |         9389 | retained missing values; no imputation at cleaning stage                             | 0.05% missing  |
 | prescriptions | document_missing        | doses_per_24_hrs                     |      7903921 | retained missing values; no imputation at cleaning stage                             | 38.95% missing |
 | prescriptions | document_missing        | route                                |         6439 | retained missing values; no imputation at cleaning stage                             | 0.03% missing  |
-| prescriptions | flag_duplicates         |                                      |             0 | duplicates retained with _is_duplicate flag; not removed                             |                |
 | prescriptions | invalid_timestamp_order | starttime/stoptime                   |       816994 | flagged with _invalid_time_order=1 and kept in dataset (no values dropped or nulled) |                |
 | prescriptions | normalize_categorical   | drug                                 |            1 | empty strings normalized to NaN                                                      |                |
 | prescriptions | normalize_categorical   | route                                |         6439 | empty strings normalized to NaN                                                      |                |
