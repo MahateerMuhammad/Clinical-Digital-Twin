@@ -1,17 +1,17 @@
 # Feature Engineering Report
 
-Generated: 2026-07-19T15:43:21.289967Z
+Generated: 2026-07-20T11:42:18.697250Z
 
 ## Feature Selection Summary
 
 - **n_features_in**: 328
-- **n_features_out**: 166
+- **n_features_out**: 179
 - **n_constant**: 3
-- **n_duplicate**: 9
-- **n_near_zero_variance**: 9
-- **n_high_missing**: 91
-- **n_highly_correlated_pairs**: 196
-- **n_dropped**: 162
+- **n_duplicate**: 6
+- **n_near_zero_variance**: 10
+- **n_high_missing**: 85
+- **n_highly_correlated_pairs**: 182
+- **n_dropped**: 149
 
 ## Dropped Features (Categorized by Reason)
 
@@ -40,9 +40,6 @@ Generated: 2026-07-19T15:43:21.289967Z
 - lab_chloride_wb_min
 - lab_chloride_wb_slope
 - lab_chloride_wb_std
-- lab_creatinine_change
-- lab_creatinine_slope
-- lab_creatinine_std
 - lab_creatinine_wb_change
 - lab_creatinine_wb_first
 - lab_creatinine_wb_last
@@ -67,20 +64,24 @@ Generated: 2026-07-19T15:43:21.289967Z
 - lab_hematocrit_wb_change
 - lab_hematocrit_wb_first
 - lab_hematocrit_wb_last
-- _... and 41 more_
+- lab_hematocrit_wb_max
+- lab_hematocrit_wb_mean
+- lab_hematocrit_wb_median
+- _... and 35 more_
 
 ### Constant / Zero Variance
 - _invalid_time_order
 - _is_duplicate
 - _is_duplicate
 - cci_aids
+- lab_creatinine_wb_abnormal_count
 - lab_creatinine_wb_change
 - lab_creatinine_wb_slope
 - lab_creatinine_wb_std
+- lab_hematocrit_missing_ratio
 - lab_hematocrit_wb_abnormal_count
 - lab_hematocrit_wb_abnormal_count
 - lab_potassium_wb_slope
-- lab_potassium_wb_std
 - note_count
 
 ### Duplicates / Highly Correlated
@@ -90,11 +91,7 @@ Generated: 2026-07-19T15:43:21.289967Z
 - char_count
 - char_count
 - char_count
-- days_to_readmission
-- days_to_readmission
-- days_to_readmission
 - diagnosis_count
-- dx_stroke
 - icu_duration_hours
 - lab_anion_gap_mean
 - lab_bicarbonate_count
@@ -108,18 +105,13 @@ Generated: 2026-07-19T15:43:21.289967Z
 - lab_bun_count
 - lab_bun_count
 - lab_bun_count
+- lab_bun_count
+- lab_bun_count
 - lab_bun_mean
 - lab_chloride_count
 - lab_chloride_mean
 - lab_chloride_missing_ratio
 - lab_chloride_wb_mean
-- lab_chloride_wb_mean
-- lab_chloride_wb_mean
-- lab_chloride_wb_mean
-- lab_chloride_wb_mean
-- lab_chloride_wb_median
-- lab_chloride_wb_median
-- lab_chloride_wb_median
 - lab_creatinine_count
 - lab_creatinine_count
 - lab_creatinine_count
@@ -129,9 +121,18 @@ Generated: 2026-07-19T15:43:21.289967Z
 - lab_creatinine_count
 - lab_creatinine_count
 - lab_creatinine_count
-- lab_creatinine_max
+- lab_creatinine_count
+- lab_creatinine_count
 - lab_creatinine_mean
 - lab_creatinine_mean
 - lab_creatinine_mean
-- lab_creatinine_mean
+- lab_creatinine_wb_first
+- lab_creatinine_wb_max
+- lab_creatinine_wb_max
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_median
 - _... and more_
