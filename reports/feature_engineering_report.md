@@ -1,17 +1,17 @@
 # Feature Engineering Report
 
-Generated: 2026-07-20T12:51:31.137031Z
+Generated: 2026-07-20T11:42:18.697250Z
 
 ## Feature Selection Summary
 
-- **n_features_in**: 71
-- **n_features_out**: 57
-- **n_constant**: 1
-- **n_duplicate**: 0
-- **n_near_zero_variance**: 3
-- **n_high_missing**: 4
-- **n_highly_correlated_pairs**: 8
-- **n_dropped**: 14
+- **n_features_in**: 328
+- **n_features_out**: 179
+- **n_constant**: 3
+- **n_duplicate**: 6
+- **n_near_zero_variance**: 10
+- **n_high_missing**: 85
+- **n_highly_correlated_pairs**: 182
+- **n_dropped**: 149
 
 ## Dropped Features (Categorized by Reason)
 
@@ -19,21 +19,120 @@ Generated: 2026-07-20T12:51:31.137031Z
 *(Note: In prior runs, all vitals/labs were dropped here due to the 1.5M row-cap bug. These are now true clinical drops.)*
 - icu_duration_days
 - icu_duration_hours
-- los
-- n_icu_stays_per_admission
+- lab_anion_gap_change
+- lab_anion_gap_slope
+- lab_anion_gap_std
+- lab_bicarbonate_change
+- lab_bicarbonate_slope
+- lab_bicarbonate_std
+- lab_bun_change
+- lab_bun_slope
+- lab_bun_std
+- lab_chloride_change
+- lab_chloride_slope
+- lab_chloride_std
+- lab_chloride_wb_change
+- lab_chloride_wb_first
+- lab_chloride_wb_last
+- lab_chloride_wb_max
+- lab_chloride_wb_mean
+- lab_chloride_wb_median
+- lab_chloride_wb_min
+- lab_chloride_wb_slope
+- lab_chloride_wb_std
+- lab_creatinine_wb_change
+- lab_creatinine_wb_first
+- lab_creatinine_wb_last
+- lab_creatinine_wb_max
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_median
+- lab_creatinine_wb_min
+- lab_creatinine_wb_slope
+- lab_creatinine_wb_std
+- lab_glucose_change
+- lab_glucose_poc_change
+- lab_glucose_poc_first
+- lab_glucose_poc_last
+- lab_glucose_poc_max
+- lab_glucose_poc_mean
+- lab_glucose_poc_median
+- lab_glucose_poc_min
+- lab_glucose_poc_slope
+- lab_glucose_poc_std
+- lab_glucose_slope
+- lab_glucose_std
+- lab_hematocrit_wb_change
+- lab_hematocrit_wb_first
+- lab_hematocrit_wb_last
+- lab_hematocrit_wb_max
+- lab_hematocrit_wb_mean
+- lab_hematocrit_wb_median
+- _... and 35 more_
 
 ### Constant / Zero Variance
 - _invalid_time_order
 - _is_duplicate
 - _is_duplicate
 - cci_aids
+- lab_creatinine_wb_abnormal_count
+- lab_creatinine_wb_change
+- lab_creatinine_wb_slope
+- lab_creatinine_wb_std
+- lab_hematocrit_missing_ratio
+- lab_hematocrit_wb_abnormal_count
+- lab_hematocrit_wb_abnormal_count
+- lab_potassium_wb_slope
+- note_count
 
 ### Duplicates / Highly Correlated
 - admit_year
 - cci_renal_disease
-- charlson_comorbidity_index
+- char_count
+- char_count
+- char_count
+- char_count
 - diagnosis_count
-- dx_diabetes
 - icu_duration_hours
-- n_icu_stays
-- procedure_count
+- lab_anion_gap_mean
+- lab_bicarbonate_count
+- lab_bicarbonate_count
+- lab_bicarbonate_mean
+- lab_bicarbonate_missing_ratio
+- lab_bicarbonate_missing_ratio
+- lab_bun_count
+- lab_bun_count
+- lab_bun_count
+- lab_bun_count
+- lab_bun_count
+- lab_bun_count
+- lab_bun_count
+- lab_bun_count
+- lab_bun_mean
+- lab_chloride_count
+- lab_chloride_mean
+- lab_chloride_missing_ratio
+- lab_chloride_wb_mean
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_mean
+- lab_creatinine_mean
+- lab_creatinine_mean
+- lab_creatinine_wb_first
+- lab_creatinine_wb_max
+- lab_creatinine_wb_max
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_median
+- _... and more_

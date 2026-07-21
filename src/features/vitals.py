@@ -49,10 +49,6 @@ def build_vital_features_from_df(chartevents: pd.DataFrame) -> pd.DataFrame:
         vital = _itemid_to_vital(int(itemid))
         if not vital:
             continue
-        # Order chronologically so _latest / rolling / trend reflect real time,
-        # not raw file order (which is not guaranteed to be sorted by charttime).
-        if "charttime" in sub.columns:
-            sub = sub.sort_values("charttime")
         vals = sub["valuenum"].dropna()
         if vals.empty:
             continue
