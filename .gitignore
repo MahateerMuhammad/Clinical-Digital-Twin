@@ -22,12 +22,12 @@ Thumbs.db
 .idea/
 *.swp
 
-# Project specific: Data and Logs
-# NEVER push data to the repository
-- data/
-+ /data/
+# Project specific: Data, Models, and Logs
+# NEVER push data or model binaries to the repository
 data/
+models/
 logs/
+*.pkl
 *.parquet
 *.csv
 *.csv.gz

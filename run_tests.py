@@ -45,7 +45,19 @@ def main():
             traceback.print_exc()
             failed += 1
 
-    print(f"\nSummary: {passed}/{len(test_funcs)} passed ({failed} failed).")
+    print("\n=== PHASE 0 UNIT TEST SUITE RESULTS ===\n")
+    import unittest
+    from tests.test_phase0 import TestPhase0
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestPhase0)
+    runner = unittest.TextTestRunner(verbosity=1)
+    res = runner.run(suite)
+    if res.wasSuccessful():
+        passed += res.testsRun
+        print(f"  [PASS] All {res.testsRun} Phase 0 unit tests passed.")
+    else:
+        failed += len(res.failures) + len(res.errors)
+
+    print(f"\nSummary: {passed} passed ({failed} failed).")
     if failed > 0:
         sys.exit(1)
 

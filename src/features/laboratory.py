@@ -132,11 +132,7 @@ def build_lab_features_chunked(
     max_chunks: Optional[int] = None,
 ) -> pd.DataFrame:
     """Stream labevents.csv and aggregate key lab stats per hadm_id."""
-    # key_labs values are lists of itemids; flatten (a plain set() over the dict
-    # values raises TypeError: unhashable type 'list').
-    key_itemids = {
-        i for v in CFG.key_labs.values() for i in (v if isinstance(v, list) else [v])
-    }
+    key_itemids = set(CFG.key_labs.values())
 
     def filter_key_labs(chunk: pd.DataFrame) -> pd.DataFrame:
         chunk["valuenum"] = pd.to_numeric(chunk.get("valuenum"), errors="coerce")
