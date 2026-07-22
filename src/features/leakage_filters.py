@@ -76,10 +76,55 @@ READMISSION_EXCLUDE_STRICT = [
 ICU_ADMISSION_EXCLUDE = [
     "icu_los_days", "n_icu_stays", "has_icu_stay",
     "icu_*", "fluids_*", "vitals_*",
+    "first_careunit", "last_careunit",
+]
+
+# Strict 24h Early Observation Window / Admission-Time ICU Risk prediction filter
+# Excludes all post-admission aggregates, slopes, lasts, notes readability, and care unit transfers.
+ICU_ADMISSION_EXCLUDE_STRICT = ICU_ADMISSION_EXCLUDE + [
+    # Post-hoc ICD diagnosis & comorbidity exclusions (leakage from current stay)
+    "charlson_comorbidity_index", "cci_*", "dx_*",
+    # Full-admission count and duration aggregates (observation window leakage)
+    "medication_count", "unique_medications", "med_duration_hours_mean", "med_duration_hours_max",
+    "unique_diagnosis_count", "unique_procedure_count", "major_procedure_count", "has_major_procedure",
+    "med_class_*",
+    # Full-admission lab trajectory metrics (last/slope/change/std/count)
+    "lab_*_last", "lab_*_slope", "lab_*_change", "lab_*_std", "lab_*_count", "lab_*_abnormal_count", "lab_*_missing_ratio",
+    "lab_unique_items",
+    "lab_*_median", "lab_*_min", "lab_*_max", "lab_*_wb_count", "lab_*_wb_missing_ratio",
+    "lab_*_wb_abnormal_count", "lab_*_poc_abnormal_count", "lab_*_poc_missing_ratio",
+    # Care unit & transfer indicators
+    "intime", "outtime",
+    # Clinical notes and text readability features
+    "note_type", "charttime", "text_clean", "readability_flesch", "text_tfidf_ready",
 ]
 
 LOS_EXCLUDE = [
     "dischtime", "discharge_location", "deathtime",
+]
+
+# Strict 24h Early Observation Window / Admission-Time Length of Stay filter
+# Excludes direct target proxies, post-hoc ICD codes, full-stay aggregates, notes readability, and care unit transfers.
+LOS_EXCLUDE_STRICT = LOS_EXCLUDE + [
+    # Direct target/outcome & resolution proxies
+    "deathtime", "dischtime", "discharge_location", "los_days", "los_hours", "dod", "hospital_expire_flag",
+    "next_admittime", "days_to_readmission", "readmission_30d", "readmit_*",
+    "icu_los_days", "n_icu_stays", "has_icu_stay", "icu_*", "fluids_*", "vitals_*",
+    # Post-hoc ICD diagnosis & comorbidity exclusions (leakage from current stay)
+    "charlson_comorbidity_index", "cci_*", "dx_*", "primary_icd_code", "icd_embedding_placeholder",
+    # Full-admission count and duration aggregates (observation window leakage)
+    "medication_count", "unique_medications", "med_duration_hours_mean", "med_duration_hours_max",
+    "unique_diagnosis_count", "unique_procedure_count", "major_procedure_count", "has_major_procedure",
+    "med_class_*",
+    # Full-admission lab trajectory metrics (last/slope/change/std/count)
+    "lab_*_last", "lab_*_slope", "lab_*_change", "lab_*_std", "lab_*_count", "lab_*_abnormal_count", "lab_*_missing_ratio",
+    "lab_unique_items",
+    "lab_*_median", "lab_*_min", "lab_*_max", "lab_*_wb_count", "lab_*_wb_missing_ratio",
+    "lab_*_wb_abnormal_count", "lab_*_poc_abnormal_count", "lab_*_poc_missing_ratio",
+    # Care unit & transfer indicators
+    "first_careunit", "last_careunit", "intime", "outtime",
+    # Clinical notes and text readability features
+    "note_type", "charttime", "text_clean", "readability_flesch", "text_tfidf_ready",
 ]
 
 

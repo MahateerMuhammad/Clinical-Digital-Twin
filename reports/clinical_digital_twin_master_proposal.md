@@ -107,14 +107,14 @@ The system provides 10 key features based on our 10 quantitative machine learnin
 - **Why It Helps:** Helps care managers set up extra post-discharge support to keep fragile patients safe at home.
 
 ### Feature 4 (Phase 3): Emergency ICU Need Predictor
-- **What It Is:** Predicts whether an Emergency Department patient will need an ICU bed.
-- **How It Works:** Evaluates presenting ED vitals and blood draws while excluding post-ICU features.
-- **Why It Helps:** Helps hospital managers allocate ICU beds early, preventing emergency room delays.
+- **What It Is:** Predicts whether a hospitalized patient will require an ICU stay during their index stay.
+- **How It Works:** Evaluates presenting demographics, admission route, baseline pre-admission comorbidity score, and first presenting lab tests at admission ($t=0$), strictly excluding post-ICU features and post-hoc discharge diagnoses (AUROC = 0.8469, AUPRC = 0.5369).
+- **Why It Helps:** Helps hospital managers allocate ICU beds early and optimizes triage routing.
 
 ### Feature 5 (Phase 4): Two-Stage Length of Stay Predictor
 - **What It Is:** Estimates how many days a patient will stay in the hospital and ICU.
-- **How It Works:** First classifies whether a stay is normal vs. extra-long, then predicts exact stay length for normal stays.
-- **Why It Helps:** Helps hospitals plan bed capacity and manage staff scheduling.
+- **How It Works:** Stage A classifies normal vs. extra-long stay ($>5.63$ days for hospital, $>4.18$ days for ICU) with LightGBM (AUROC = 0.7460). Stage B predicts exact stay duration for short stays with an MAE of ~1.09 days.
+- **Why It Helps:** Helps hospitals plan bed capacity and manage staff scheduling without getting skewed by extreme long-stay outliers.
 
 ### Feature 6 (Phase 5): 6-Hour Early Deterioration Warning
 - **What It Is:** An alert system that warns of sudden health drops 6 hours before a patient needs emergency ICU transfer.
@@ -213,7 +213,9 @@ Our test runs across 546,028 hospital admissions proved the system's accuracy an
 
 1. **Phase 1 Mortality Model Accuracy:** Achieved **0.9484 AUROC** on strict 24-hour data without cheating or using post-discharge diagnostic codes. Applying Isotonic Calibration reduced probability error by **80.0%**.
 2. **Phase 2 Readmission Model Accuracy:** Prior hospital visit history (Expansion A & D) boosted readmission prediction to **0.7094 AUROC** and **0.4195 AUPRC** (over **2 times better than random guessing**), outperforming traditional LACE medical scores.
-3. **Manual Verification:** Hand-counting 10 multi-visit patient cases confirmed **100% precision (10/10 match)** with zero data leakage across hospital visits.
+3. **Phase 3 ICU Admission Model Accuracy:** Enforcing strict pre-admission comorbidity calculations and $t = 0$ Timing Discipline yielded an AUROC of **0.8469** and an AUPRC of **0.5369** (a **3.45x enrichment** over the 15.55% base rate) on the holdout test set.
+4. **Phase 4 Two-Stage Length of Stay Accuracy:** Stage A classified long vs. short stays with **0.7460 AUROC**, and Stage B predicted short-stay duration with a **Mean Absolute Error (MAE) of ~1.09 days** for hospital stays and **0.78 days** for ICU stays.
+5. **Manual Verification:** Hand-counting 10 multi-visit patient cases confirmed **100% precision (10/10 match)** with zero data leakage across hospital visits.
 
 ---
 
@@ -230,3 +232,47 @@ Our test runs across 546,028 hospital admissions proved the system's accuracy an
 ### C. Regulatory & Data Safety Compliance
 - **FDA Guidance:** Complies with FDA Non-Device Clinical Decision Support rules (Section 520(o)(1)(E)) by ensuring all recommendations are fully explainable via SHAP charts and medical citations.
 - **HIPAA Data Privacy:** Uses enterprise cloud endpoints with zero-data retention or runs 100% locally on hospital hardware (via Ollama) without internet access.
+
+---
+
+## 8. Technical Stack & Deployment Platform
+
+To ensure robust local training, clinical safety, and data privacy, the platform uses a containerized, hybrid ML/LLM technical stack.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          PLATFORM TECHNICAL STACK                           │
+├───────────────────────┬─────────────────────────────┬───────────────────────┤
+│   NUMERICAL MODELS    │    LLM & RAG FRAMEWORK      │  INFRA & DEPLOYMENT   │
+│ • LightGBM 4.3.0      │ • LLaMA 3 (8B Instruct)     │ • Streamlit Frontend  │
+│ • XGBoost 2.0.0       │ • Ollama (Local Inference)  │ • Docker Containers   │
+│ • Scikit-Learn 1.5.0  │ • LangChain Orchestration   │ • Google Cloud VM     │
+│ • PyTorch (LSTM)      │ • FAISS Vector Storage      │   (NVIDIA T4 GPU)     │
+│ • SHAP Explainability │ • SQLite Cache Database     │ • GitHub Actions CI   │
+└───────────────────────┴─────────────────────────────┴───────────────────────┘
+```
+
+### A. Machine Learning & Predictive Modeling (Engine 1)
+*   **Modeling Frameworks:** 
+    *   **LightGBM (v4.3.0+)** for final production gradient-boosted tabular risk prediction (mortality, readmission, ICU admission, and LOS).
+    *   **XGBoost (v2.0.0+)** and **Scikit-Learn (v1.5.0+)** for baseline modeling, L2 logistic regression, and isotonic probability calibration.
+    *   **PyTorch (v2.2.0+)** for sequence trend analysis using deep LSTM and Transformer architectures.
+*   **Interpretability Suite:** **SHAP (v0.45.0+)** to calculate Shapley additive feature attribution values for local explanations.
+*   **Data Processing:** **Pandas (v2.2.0+)**, **NumPy (v1.26.0+)**, and **PyArrow (v14.0.0+)** for reading compressed parquet datasets and high-speed data frame manipulation.
+
+### B. Grounded RAG & Conversational AI (Engine 2)
+*   **Language Model:** **LLaMA 3 (8B Instruct)** run locally via **Ollama** for low-latency, HIPAA-compliant clinical query handling.
+*   **Orchestration Engine:** **LangChain (v0.1.0+)** for structured output parsing, LLM-based tool triggering (executing the LightGBM pickles), and agent workflows.
+*   **Vector Storage:** **FAISS (v1.7.4+)** for indexing and retrieving relevant sections from the medical guideline corpora (FDA DailyMed, KDIGO, ACC/AHA, PubMed abstracts).
+*   **Embeddings Model:** **HuggingFace transformers** locally running `all-MiniLM-L6-v2` for generating vector embeddings of clinical documents.
+
+### C. UI & Visualisation Dashboard
+*   **Web Frontend:** **Streamlit** for rendering the interactive clinician dashboard, which displays patient risk timelines, custom lab metrics, and conversational RAG inputs.
+*   **Plotting Libraries:** **Plotly (v5.22.0+)** for interactive patient timelines and vital sign time-series, and **Matplotlib (v3.9.0+)** / **Seaborn (v0.13.0+)** for static performance charts (ROC, Precision-Recall, Calibration Curves).
+
+### D. Hosting, Infrastructure & DevOps
+*   **Deployment Environment:** Hosted on a secure **Google Cloud VM** equipped with an **NVIDIA T4 GPU** (16GB VRAM) for accelerated local LLaMA 3 inference.
+*   **Containerization:** **Docker** for packaging code, python virtual environments, and dependencies into isolated service containers.
+*   **Data Storage:** **SQLite** for metadata and LLM caching, alongside local parquet and model pickle files.
+*   **CI/CD Pipeline:** **GitHub Actions** for automating formatting lint checks and unit testing on every pull request.
+
