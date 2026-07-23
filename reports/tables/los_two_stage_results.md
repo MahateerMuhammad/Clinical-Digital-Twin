@@ -13,14 +13,14 @@
 
 | Target | Model Name | Run Protocol | AUROC | AUPRC | Base Rate AUPRC | Brier Score | Decision Threshold | F1 | Precision | Recall |
 |:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Hospital LOS | **Logistic Regression** | Stage A | **0.7940** | **0.5045** | 0.2486 | 0.1917 | 0.5231 | 0.5541 | 0.4232 | 0.8022 |
-| Hospital LOS | **XGBoost** | Stage A | **0.8079** | **0.5373** | 0.2486 | 0.1856 | 0.5367 | 0.5647 | 0.4378 | 0.7951 |
-| Hospital LOS | **LightGBM** | Stage A | **0.8114** | **0.5434** | 0.2486 | 0.1837 | 0.5393 | 0.5698 | 0.4437 | 0.7960 |
-| Hospital LOS | **LightGBM (Calibrated)** | Stage A | **0.8112** | **0.5367** | 0.2486 | 0.1446 | 0.2820 | 0.5696 | 0.4382 | 0.8137 |
-| ICU LOS | **Logistic Regression** | Stage A | **0.6210** | **0.3429** | 0.2498 | 0.2385 | 0.4389 | 0.4246 | 0.2886 | 0.8029 |
-| ICU LOS | **XGBoost** | Stage A | **0.6406** | **0.3666** | 0.2498 | 0.2301 | 0.4342 | 0.4359 | 0.2998 | 0.7982 |
-| ICU LOS | **LightGBM** | Stage A | **0.6381** | **0.3646** | 0.2498 | 0.2258 | 0.4171 | 0.4328 | 0.2972 | 0.7960 |
-| ICU LOS | **LightGBM (Calibrated)** | Stage A | **0.6372** | **0.3557** | 0.2498 | 0.1787 | 0.1943 | 0.4319 | 0.2926 | 0.8246 |
+| Hospital LOS | **Logistic Regression** | Stage A (Admission-Time) | **0.7940** | **0.5045** | 0.2486 | 0.1917 | 0.5231 | 0.5541 | 0.4232 | 0.8022 |
+| Hospital LOS | **XGBoost** | Stage A (Admission-Time) | **0.8079** | **0.5373** | 0.2486 | 0.1856 | 0.5367 | 0.5647 | 0.4378 | 0.7951 |
+| Hospital LOS | **LightGBM** | Stage A (Admission-Time) | **0.8114** | **0.5434** | 0.2486 | 0.1837 | 0.5393 | 0.5698 | 0.4437 | 0.7960 |
+| Hospital LOS | **LightGBM (Calibrated)** | Stage A (Admission-Time) | **0.8112** | **0.5367** | 0.2486 | 0.1446 | 0.2820 | 0.5696 | 0.4382 | 0.8137 |
+| ICU LOS | **Logistic Regression** | Stage A (Admission-Time) | **0.6210** | **0.3429** | 0.2498 | 0.2385 | 0.4389 | 0.4246 | 0.2886 | 0.8029 |
+| ICU LOS | **XGBoost** | Stage A (Admission-Time) | **0.6406** | **0.3666** | 0.2498 | 0.2301 | 0.4342 | 0.4359 | 0.2998 | 0.7982 |
+| ICU LOS | **LightGBM** | Stage A (Admission-Time) | **0.6381** | **0.3646** | 0.2498 | 0.2258 | 0.4171 | 0.4328 | 0.2972 | 0.7960 |
+| ICU LOS | **LightGBM (Calibrated)** | Stage A (Admission-Time) | **0.6372** | **0.3557** | 0.2498 | 0.1787 | 0.1943 | 0.4319 | 0.2926 | 0.8246 |
 
 ## 3. Stage B — Short-Bucket Duration Regression Performance
 
@@ -43,7 +43,3 @@
 1. **Right-Tail Isolation:** Classifying long stays in Stage A effectively isolates extreme outliers (>75th percentile), preventing regression skew.
 2. **Deployment Realism:** Evaluating Stage B on predicted short-stay patients captures real-world error propagation from Stage A classification.
 3. **Explicit Scope Limitation:** Exact duration predictions are provided ONLY for the short-stay bucket; long-stay cases are flagged for clinical review without artificial exact-day estimates.
-4. **ICU LOS Scope Distinction:** The ICU LOS model is evaluated strictly on admissions with an ICU stay (`has_icu_stay == 1`, $N = 85,242$), predicting ICU stay duration conditional on ICU admission, distinct from the Phase 3 ICU admission risk model.
-
-> [!WARNING]
-> **Stage B Low R² Framing:** Stage B regressors achieve low R² scores ($R^2 = 0.1738$ for hospital LOS, $R^2 = 0.0909$ for ICU LOS under deployment primary). Exact-duration prediction at admission remains inherently unreliable even within short stays. Stage B outputs must be interpreted as **rough directional estimates** rather than precise forecasts.

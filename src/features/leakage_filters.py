@@ -127,6 +127,30 @@ LOS_EXCLUDE_STRICT = LOS_EXCLUDE + [
     "note_type", "charttime", "text_clean", "readability_flesch", "text_tfidf_ready",
 ]
 
+DETERIORATION_EXCLUDE = [
+    "dischtime", "deathtime", "discharge_location", "dod", "los_days", "los_hours",
+    "hospital_expire_flag", "first_careunit*", "last_careunit*", "intime*", "outtime*",
+    "icu_los_days", "n_icu_stays", "has_icu_stay", "next_admittime", "days_to_readmission", "readmission_30d",
+]
+
+# Strict Clinical Deterioration Exclusion List
+# Excludes direct target proxies, post-hoc care unit transfers, discharge outcomes, post-hoc ICD coding,
+# ICU chartevents vitals (availability leakage), full-stay accumulation metrics, and full-stay lab order frequency/median features.
+DETERIORATION_EXCLUDE_STRICT = DETERIORATION_EXCLUDE + [
+    # Post-hoc ICD diagnosis & comorbidity exclusions (leakage from current stay resolution)
+    "charlson_comorbidity_index", "cci_*", "dx_*", "primary_icd_code", "icd_embedding_placeholder",
+    # ICU chartevents vitals (100% missing for ward target=0, 0% missing for target=1 -> availability leakage)
+    "vital_*", "news2_*",
+    # Full-admission accumulation counts & duration metrics (observation window leakage)
+    "medication_count", "unique_medications", "med_duration_hours_mean", "med_duration_hours_max",
+    "unique_diagnosis_count", "unique_procedure_count", "major_procedure_count", "has_major_procedure",
+    "unique_*", "*_count", "*_abnormal_count", "*_missing_ratio", "lab_unique_items", "*_ratio",
+    # Full-admission lab trajectory medians, extremes, lasts (window overflow leakage)
+    "lab_*_median", "lab_*_last", "lab_*_max", "lab_*_min", "lab_*_std", "lab_*_slope", "lab_*_change",
+    # Clinical notes and text readability features
+    "note_type", "charttime", "text_clean", "readability_flesch", "text_tfidf_ready",
+]
+
 
 def match_column_patterns(columns: List[str], patterns: List[str]) -> List[str]:
     """
