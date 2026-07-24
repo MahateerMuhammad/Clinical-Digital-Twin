@@ -54,3 +54,8 @@ logs/
 
 # Temporary/test scripts
 test_mixed.py
+
+# Zip archives
+*.zip
+src.zip
+
