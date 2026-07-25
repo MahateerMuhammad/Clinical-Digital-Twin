@@ -201,5 +201,11 @@ Below are the exact empirical audit results across all 7 evaluated techniques ($
    - **Use Technique 7 ($Z_{\text{hybrid}}$)** when the attending clinician's objective is **presentation process matching** (disease diagnoses, 24h lab bounds, 24h medication classes).
    - **Use Technique 5 ($Z_{\text{tree\_latent}}$)** when the attending clinician's objective is **mortality outcome risk alignment** (surfacing historical twins aligned with non-linear decision tree mortality splits).
 
-4. **Strict Split Isolation & Zero Retrospective Data Leakage**:
+4. **Universal Failure of 30-Day Readmission Outcome Retrieval Across All Techniques**:
+   Across all 8 evaluated representation spaces (naive baseline included), 30-day readmission enrichment remains strictly bounded between **$0.98\times$ and $1.04\times$**, and **every single 95% Bootstrap Confidence Interval overlaps the naive baseline's readmission CI ($18.92\%\text{--}20.78\%$)**.
+   This establishes that **zero techniques—including Technique 5, the singular mortality success—show a statistically confirmed effect for 30-day readmission retrieval**. Technique 5's confirmed outcome alignment effect is specific to acute in-hospital mortality and does **not** extend to post-discharge readmission risk.
+   - *Clinical Pathophysiological Rationale*: 30-day post-discharge readmission is driven primarily by post-discharge outpatient compliance, home social support, outpatient pharmacy access, and post-acute follow-up care—factors that are fundamentally unobservable in the first 24 hours of inpatient admission ($t = 24\text{h}$).
+   - *Future Scope*: Improving post-discharge readmission retrieval remains an open, unresolved negative result for future representation learning phases.
+
+5. **Strict Split Isolation & Zero Retrospective Data Leakage**:
    All encoder models, scalers, decision trees, and triplet samplers were fit **exclusively on the `train` split ($N = 338,825$)**. Test-set evaluation ($N = 82,806$) was conducted strictly by inference pass. Outcome data remain isolated strictly within the downstream clinical display layer for point-of-care decision support.
