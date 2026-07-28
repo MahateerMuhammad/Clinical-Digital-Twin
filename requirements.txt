@@ -1,6 +1,6 @@
 # ─────────────────────────────────────────────────────────
 # Clinical Digital Twin — requirements.txt
-# Python 3.9+
+# Python >=3.10,<3.14  (numba, a shap dependency, has no 3.14 support)
 # ─────────────────────────────────────────────────────────
 
 # Core data stack
@@ -11,6 +11,12 @@ pyarrow>=14.0.0
 # Machine learning / statistics
 scikit-learn>=1.5.0
 scipy>=1.13.0
+xgboost>=2.1.0
+lightgbm>=4.5.0
+joblib>=1.4.0
+
+# Model explainability (src/models/, src/visualization/model_plots.py)
+shap>=0.46.0
 
 # Visualisation
 matplotlib>=3.9.0

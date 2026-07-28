@@ -66,7 +66,7 @@ class EnterpriseClinicalAgent:
         labs = patient_payload.get('presentation_labs', {}) if isinstance(patient_payload, dict) else {}
         vitals = patient_payload.get('vital_signs', {}) if isinstance(patient_payload, dict) else {}
         
-        ranked_meds = rag_store.rank_medications_by_mechanistic_relevance(patient_payload)
+        ranked_meds = rag_store.ranked_ingredients(patient_payload)
         
         sbp = float(vitals.get('sbp_min', 120))
         hr = float(vitals.get('hr_max', 80))
@@ -134,7 +134,7 @@ class EnterpriseClinicalAgent:
         wbc = float(labs.get('wbc_max', labs.get('lab_wbc_max', 8.5)))
         sbp = float(vitals.get('sbp_min', 120))
         
-        ranked_meds = rag_store.rank_medications_by_mechanistic_relevance(patient_payload)
+        ranked_meds = rag_store.ranked_ingredients(patient_payload)
         
         tier_a_items = []
         tier_b_items = []

@@ -1,0 +1,104 @@
+{
+  "_meta": {
+    "name": "Topical relevance judgement gold set",
+    "version": "2026.07.1",
+    "task": "(patient presentation, candidate document) -> should this document be admitted as evidence?",
+    "authored_by": "engineering (LLM-assisted)",
+    "review_status": "unreviewed",
+    "review_note": "Hard negatives were chosen to be genuinely difficult (shared vocabulary, adjacent organ systems, or the 'pe' substring trap). Positives use synonyms and abbreviations a clinician would actually type. Not independently clinician-validated.",
+    "measures": "precision / recall / F1 of verify_topical_relevance",
+    "label": {"1": "admit as evidence", "0": "reject — off topic for this patient"}
+  },
+  "pairs": [
+    {"id": "R01", "diagnosis": "Septic Shock", "title": "Early antimicrobial therapy in septic shock", "label": 1},
+    {"id": "R02", "diagnosis": "Septicaemia", "title": "Lactate clearance and mortality in sepsis", "label": 1},
+    {"id": "R03", "diagnosis": "Urosepsis", "title": "Source control in intra-abdominal infection", "label": 1},
+    {"id": "R04", "diagnosis": "Sepsis", "title": "Norepinephrine versus dopamine in shock", "label": 1},
+    {"id": "R05", "diagnosis": "Septic Shock", "title": "Outcomes after elective knee arthroplasty", "label": 0},
+    {"id": "R06", "diagnosis": "Septic Shock", "title": "Screening mammography uptake in primary care", "label": 0},
+    {"id": "R07", "diagnosis": "Septic Shock", "title": "Corneal transplantation graft survival", "label": 0},
+
+    {"id": "R08", "diagnosis": "STEMI", "title": "Troponin dynamics after myocardial infarction", "label": 1},
+    {"id": "R09", "diagnosis": "NSTEMI", "title": "Early invasive strategy in acute coronary syndrome", "label": 1},
+    {"id": "R10", "diagnosis": "MI", "title": "Primary PCI versus fibrinolysis", "label": 1},
+    {"id": "R11", "diagnosis": "STEMI", "title": "Bowel preparation quality before colonoscopy", "label": 0},
+    {"id": "R12", "diagnosis": "STEMI", "title": "Physiotherapy after ankle fracture", "label": 0},
+
+    {"id": "R13", "diagnosis": "CVA", "title": "Alteplase thrombolysis in acute ischemic stroke", "label": 1},
+    {"id": "R14", "diagnosis": "Brain attack", "title": "Thrombectomy in large vessel occlusion", "label": 1},
+    {"id": "R15", "diagnosis": "Cerebral infarction", "title": "Blood pressure management after thrombolysis", "label": 1},
+    {"id": "R16", "diagnosis": "CVA", "title": "Antenatal corticosteroids in preterm labour", "label": 0},
+
+    {"id": "R17", "diagnosis": "UGIB", "title": "Endoscopy timing in upper gastrointestinal bleeding", "label": 1},
+    {"id": "R18", "diagnosis": "Haematemesis", "title": "Proton pump inhibitor infusion after ulcer bleeding", "label": 1},
+    {"id": "R19", "diagnosis": "Melena", "title": "Restrictive transfusion in gastrointestinal haemorrhage", "label": 1},
+    {"id": "R20", "diagnosis": "UGIB", "title": "Inhaled corticosteroids in mild asthma", "label": 0},
+
+    {"id": "R21", "diagnosis": "AKI", "title": "Timing of renal replacement therapy initiation", "label": 1},
+    {"id": "R22", "diagnosis": "Renal insufficiency", "title": "Nephrotoxicity of vancomycin plus piperacillin", "label": 1},
+    {"id": "R23", "diagnosis": "Acute tubular necrosis", "title": "Urine output as a marker of kidney injury", "label": 1},
+    {"id": "R24", "diagnosis": "AKI", "title": "Cataract surgery outcomes in the elderly", "label": 0},
+
+    {"id": "R25", "diagnosis": "CHF exacerbation", "title": "Diuretic strategies in acute heart failure", "label": 1},
+    {"id": "R26", "diagnosis": "Congestive cardiac failure", "title": "Natriuretic peptide guided therapy", "label": 1},
+    {"id": "R27", "diagnosis": "Cardiorenal syndrome", "title": "Worsening renal function during decongestion", "label": 1},
+    {"id": "R28", "diagnosis": "CHF exacerbation", "title": "Helicobacter pylori eradication regimens", "label": 0},
+
+    {"id": "R29", "diagnosis": "DKA", "title": "Insulin infusion protocols in diabetic ketoacidosis", "label": 1},
+    {"id": "R30", "diagnosis": "Diabetic ketoacidosis", "title": "Potassium replacement during insulin therapy", "label": 1},
+    {"id": "R31", "diagnosis": "DKA", "title": "Rotator cuff repair rehabilitation protocols", "label": 0},
+
+    {"id": "R32", "diagnosis": "ARDS", "title": "Low tidal volume ventilation and mortality", "label": 1},
+    {"id": "R33", "diagnosis": "Acute respiratory failure", "title": "Prone positioning in severe hypoxaemia", "label": 1},
+    {"id": "R34", "diagnosis": "ARDS", "title": "Topical treatments for plaque psoriasis", "label": 0},
+
+    {"id": "R35", "diagnosis": "Hepatic encephalopathy", "title": "Rifaximin for recurrence prevention in cirrhosis", "label": 1},
+    {"id": "R36", "diagnosis": "Decompensated cirrhosis", "title": "Ammonia levels and grading of encephalopathy", "label": 1},
+    {"id": "R37", "diagnosis": "Hepatic encephalopathy", "title": "Diabetic retinopathy screening intervals", "label": 0},
+
+    {"id": "R38", "diagnosis": "Pulmonary embolism", "title": "Systemic thrombolysis in high-risk pulmonary embolism", "label": 1},
+    {"id": "R39", "diagnosis": "VTE", "title": "Direct oral anticoagulants versus warfarin", "label": 1},
+    {"id": "R40", "diagnosis": "Pulmonary embolism", "title": "Management of chronic sinusitis", "label": 0},
+
+    {"id": "R41", "diagnosis": "Hyperkalemia", "title": "Alteplase thrombolysis for pulmonary embolism", "label": 0,
+     "trap": "pe_substring", "note": "'pe' inside hyPErkalemia previously admitted PE literature"},
+    {"id": "R42", "diagnosis": "Hypertensive emergency", "title": "Anticoagulation for venous thromboembolism", "label": 0,
+     "trap": "pe_substring", "note": "'pe' inside hyPErtensive"},
+    {"id": "R43", "diagnosis": "Hyperglycaemia", "title": "RV strain on echocardiography in embolism", "label": 0,
+     "trap": "pe_substring"},
+    {"id": "R44", "diagnosis": "Peptic ulcer disease", "title": "Heparin bridging in thromboembolism", "label": 0,
+     "trap": "pe_substring", "note": "PEptic"},
+    {"id": "R45", "diagnosis": "Hypernatraemia", "title": "Catheter directed thrombolysis for saddle embolus", "label": 0,
+     "trap": "pe_substring"},
+    {"id": "R46", "diagnosis": "Pericarditis", "title": "Anticoagulation duration after first unprovoked PE", "label": 0,
+     "trap": "pe_substring"},
+
+    {"id": "R47", "diagnosis": "Hyperkalemia", "title": "Calcium gluconate for membrane stabilisation in hyperkalaemia", "label": 1},
+    {"id": "R48", "diagnosis": "Hypertensive emergency", "title": "Nicardipine infusion for rapid blood pressure control", "label": 1},
+
+    {"id": "R49", "diagnosis": "Septic Shock", "title": "Vancomycin trough monitoring in critical illness", "label": 1,
+     "note": "relevant via a medication the patient is on", "medications": ["vancomycin"]},
+    {"id": "R50", "diagnosis": "Septic Shock", "title": "Levothyroxine absorption and food timing", "label": 0,
+     "medications": ["vancomycin"]},
+
+    {"id": "R51", "diagnosis": "Pneumonia", "title": "Empiric antibiotic selection in community acquired pneumonia", "label": 1},
+    {"id": "R52", "diagnosis": "CAP", "title": "Procalcitonin guided antibiotic duration", "label": 1},
+    {"id": "R53", "diagnosis": "Pneumonia", "title": "Laparoscopic versus open appendicectomy", "label": 0},
+
+    {"id": "R54", "diagnosis": "COPD", "title": "Non-invasive ventilation in hypercapnic respiratory failure", "label": 1},
+    {"id": "R55", "diagnosis": "AECOPD", "title": "Systemic corticosteroid duration in exacerbations", "label": 1},
+    {"id": "R56", "diagnosis": "COPD", "title": "Bariatric surgery and weight regain", "label": 0},
+
+    {"id": "R57", "diagnosis": "Acute pancreatitis", "title": "Aggressive versus moderate fluid resuscitation in pancreatitis", "label": 1},
+    {"id": "R58", "diagnosis": "Acute pancreatitis", "title": "Lipase versus amylase for diagnosis", "label": 1},
+    {"id": "R59", "diagnosis": "Acute pancreatitis", "title": "Contact lens related keratitis", "label": 0},
+
+    {"id": "R60", "diagnosis": "Septic Shock & Acute Respiratory Failure", "title": "Prone positioning in ARDS", "label": 1,
+     "note": "composite presentation: relevant via the second concept"},
+    {"id": "R61", "diagnosis": "Septic Shock & Acute Respiratory Failure", "title": "Antibiotic timing in sepsis", "label": 1,
+     "note": "composite presentation: relevant via the first concept"},
+    {"id": "R62", "diagnosis": "Cardiorenal Syndrome & Stage 3 AKI", "title": "Renal replacement therapy initiation timing", "label": 1},
+    {"id": "R63", "diagnosis": "Cardiorenal Syndrome & Stage 3 AKI", "title": "Loop diuretic dosing in decompensated heart failure", "label": 1},
+    {"id": "R64", "diagnosis": "Cardiorenal Syndrome & Stage 3 AKI", "title": "Varicose vein sclerotherapy outcomes", "label": 0}
+  ]
+}
