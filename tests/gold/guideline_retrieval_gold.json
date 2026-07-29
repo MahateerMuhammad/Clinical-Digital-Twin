@@ -1,0 +1,124 @@
+{
+  "_meta": {
+    "name": "Level 1 guideline retrieval gold set",
+    "version": "2026.07.1",
+    "task": "clinical query -> ranked guideline doc_ids from the curated offline corpus",
+    "authored_by": "engineering (LLM-assisted)",
+    "review_status": "unreviewed",
+    "review_note": "Relevance grades were assigned by the same author as the corpus. They test retrieval and ranking behaviour, not clinical correctness of the recommendations themselves.",
+    "grading": {
+      "2": "directly answers the query; the document a clinician would want first",
+      "1": "relevant to the presentation but not the specific question asked",
+      "0": "not relevant (implicit for any doc_id not listed)"
+    },
+    "corpus": "src/llm/guidelines.py GUIDELINE_CORPUS"
+  },
+  "queries": [
+    {"qid": "G01", "query": "antibiotic timing in septic shock", "concepts": ["sepsis"],
+     "relevant": {"SSC2021-ABX": 2, "SSC2021-FLUID": 1, "SSC2021-MAP": 1}},
+    {"qid": "G02", "query": "how much fluid to give in sepsis", "concepts": ["sepsis"],
+     "relevant": {"SSC2021-FLUID": 2, "SSC2021-MAP": 1, "SSC2021-ABX": 1}},
+    {"qid": "G03", "query": "vasopressor choice and MAP target septic shock", "concepts": ["sepsis"],
+     "relevant": {"SSC2021-MAP": 2, "SSC2021-FLUID": 1}},
+    {"qid": "G04", "query": "norepinephrine first line", "concepts": ["sepsis"],
+     "relevant": {"SSC2021-MAP": 2}},
+    {"qid": "G05", "query": "blood cultures before antibiotics", "concepts": ["sepsis"],
+     "relevant": {"SSC2021-ABX": 2}},
+
+    {"qid": "G06", "query": "when to start dialysis in acute kidney injury", "concepts": ["aki"],
+     "relevant": {"KDIGO2012-AKI-RRT": 2, "KDIGO2012-AKI-NEPHROTOX": 1}},
+    {"qid": "G07", "query": "nephrotoxic drugs should be held", "concepts": ["aki"],
+     "relevant": {"KDIGO2012-AKI-NEPHROTOX": 2, "KDIGO2012-AKI-DOSING": 1}},
+    {"qid": "G08", "query": "renal dose adjustment in changing kidney function", "concepts": ["aki"],
+     "relevant": {"KDIGO2012-AKI-DOSING": 2, "KDIGO2012-AKI-NEPHROTOX": 1}},
+    {"qid": "G09", "query": "AKI management", "concepts": ["aki"],
+     "relevant": {"KDIGO2012-AKI-NEPHROTOX": 2, "KDIGO2012-AKI-RRT": 1, "KDIGO2012-AKI-DOSING": 1}},
+
+    {"qid": "G10", "query": "diuretic dosing in acute decompensated heart failure", "concepts": ["heart_failure"],
+     "relevant": {"AHA2022-HF-DIURESIS": 2, "AHA2022-HF-CARDIORENAL": 1}},
+    {"qid": "G11", "query": "creatinine rising during diuresis should I stop", "concepts": ["heart_failure", "aki"],
+     "relevant": {"AHA2022-HF-CARDIORENAL": 2, "AHA2022-HF-DIURESIS": 1, "KDIGO2012-AKI-NEPHROTOX": 1}},
+    {"qid": "G12", "query": "cardiorenal syndrome management", "concepts": ["heart_failure", "aki"],
+     "relevant": {"AHA2022-HF-CARDIORENAL": 2, "AHA2022-HF-DIURESIS": 1}},
+
+    {"qid": "G13", "query": "potassium before starting insulin in DKA", "concepts": ["dka"],
+     "relevant": {"ADA-DKA-POTASSIUM": 2, "ADA-DKA-FLUID": 1}},
+    {"qid": "G14", "query": "fluid and dextrose in diabetic ketoacidosis", "concepts": ["dka"],
+     "relevant": {"ADA-DKA-FLUID": 2, "ADA-DKA-POTASSIUM": 1}},
+    {"qid": "G15", "query": "DKA treatment", "concepts": ["dka"],
+     "relevant": {"ADA-DKA-FLUID": 2, "ADA-DKA-POTASSIUM": 2}},
+
+    {"qid": "G16", "query": "hyperkalaemia with ECG changes emergency management", "concepts": ["hyperkalemia"],
+     "relevant": {"HYPERK-STABILISE": 2}},
+    {"qid": "G17", "query": "calcium gluconate potassium binder dialysis", "concepts": ["hyperkalemia"],
+     "relevant": {"HYPERK-STABILISE": 2}},
+
+    {"qid": "G18", "query": "tidal volume in ARDS", "concepts": ["ards"],
+     "relevant": {"ATS2017-ARDS-VT": 2, "ATS2017-ARDS-PRONE": 1}},
+    {"qid": "G19", "query": "prone positioning severe ARDS", "concepts": ["ards"],
+     "relevant": {"ATS2017-ARDS-PRONE": 2, "ATS2017-ARDS-VT": 1}},
+    {"qid": "G20", "query": "lung protective ventilation", "concepts": ["ards"],
+     "relevant": {"ATS2017-ARDS-VT": 2}},
+
+    {"qid": "G21", "query": "thrombolysis time window acute ischaemic stroke", "concepts": ["stroke"],
+     "relevant": {"AHA2019-STROKE-IVT": 2, "AHA2019-STROKE-BP": 1}},
+    {"qid": "G22", "query": "blood pressure target before alteplase", "concepts": ["stroke"],
+     "relevant": {"AHA2019-STROKE-BP": 2, "AHA2019-STROKE-IVT": 1}},
+    {"qid": "G23", "query": "CVA management", "concepts": ["stroke"],
+     "relevant": {"AHA2019-STROKE-IVT": 2, "AHA2019-STROKE-BP": 1}},
+
+    {"qid": "G24", "query": "transfusion threshold in upper GI bleeding", "concepts": ["gi_bleed"],
+     "relevant": {"ACG2021-UGIB": 2}},
+    {"qid": "G25", "query": "endoscopy timing GI bleed", "concepts": ["gi_bleed"],
+     "relevant": {"ACG2021-UGIB": 2}},
+    {"qid": "G26", "query": "octreotide and antibiotics in variceal bleeding", "concepts": ["gi_bleed", "liver_failure"],
+     "relevant": {"AASLD-VARICEAL": 2, "ACG2021-UGIB": 1}},
+
+    {"qid": "G27", "query": "reperfusion strategy STEMI", "concepts": ["myocardial_infarction"],
+     "relevant": {"ACC2021-ACS-REPERFUSION": 2}},
+    {"qid": "G28", "query": "door to balloon time", "concepts": ["myocardial_infarction"],
+     "relevant": {"ACC2021-ACS-REPERFUSION": 2}},
+
+    {"qid": "G29", "query": "fluid resuscitation acute pancreatitis", "concepts": ["pancreatitis"],
+     "relevant": {"ACG2013-PANC-FLUID": 2}},
+    {"qid": "G30", "query": "prophylactic antibiotics in pancreatitis", "concepts": ["pancreatitis"],
+     "relevant": {"ACG2013-PANC-FLUID": 2}},
+
+    {"qid": "G31", "query": "empiric antibiotics community acquired pneumonia", "concepts": ["pneumonia"],
+     "relevant": {"ATS2019-CAP": 2}},
+    {"qid": "G32", "query": "MRSA and pseudomonas risk factors pneumonia", "concepts": ["pneumonia"],
+     "relevant": {"ATS2019-CAP": 2}},
+
+    {"qid": "G33", "query": "non invasive ventilation in COPD exacerbation", "concepts": ["copd"],
+     "relevant": {"GOLD-COPD-EXAC": 2}},
+    {"qid": "G34", "query": "steroids in AECOPD", "concepts": ["copd"],
+     "relevant": {"GOLD-COPD-EXAC": 2}},
+
+    {"qid": "G35", "query": "lactulose rifaximin hepatic encephalopathy", "concepts": ["liver_failure"],
+     "relevant": {"AASLD-HE": 2}},
+    {"qid": "G36", "query": "treatment of overt hepatic encephalopathy", "concepts": ["liver_failure"],
+     "relevant": {"AASLD-HE": 2, "AASLD-VARICEAL": 1}},
+
+    {"qid": "G37", "query": "anticoagulation in pulmonary embolism", "concepts": ["pulmonary_embolism"],
+     "relevant": {"CHEST2021-VTE": 2}},
+    {"qid": "G38", "query": "when to thrombolyse pulmonary embolism", "concepts": ["pulmonary_embolism"],
+     "relevant": {"CHEST2021-VTE": 2}},
+
+    {"qid": "G39", "query": "STEMI", "concepts": ["myocardial_infarction"],
+     "relevant": {"ACC2021-ACS-REPERFUSION": 2}, "note": "abbreviation-only query"},
+    {"qid": "G40", "query": "UGIB", "concepts": ["gi_bleed"],
+     "relevant": {"ACG2021-UGIB": 2, "AASLD-VARICEAL": 1}, "note": "abbreviation-only query"},
+    {"qid": "G41", "query": "AKI", "concepts": ["aki"],
+     "relevant": {"KDIGO2012-AKI-NEPHROTOX": 1, "KDIGO2012-AKI-RRT": 1, "KDIGO2012-AKI-DOSING": 1},
+     "note": "bare abbreviation, no specific question"},
+
+    {"qid": "G42", "query": "elective knee arthroplasty rehabilitation", "concepts": [],
+     "relevant": {}, "note": "out of scope: must return nothing, not a nearest guess"},
+    {"qid": "G43", "query": "seasonal allergic rhinitis", "concepts": [],
+     "relevant": {}, "note": "out of scope"},
+    {"qid": "G44", "query": "dental caries management", "concepts": [],
+     "relevant": {}, "note": "out of scope"},
+    {"qid": "G45", "query": "asdfqwer", "concepts": [],
+     "relevant": {}, "note": "junk query"}
+  ]
+}

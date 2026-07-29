@@ -26,6 +26,69 @@ log = get_logger(__name__)
 # in a mortality model is not a predictor, it's the label in disguise).
 # A 2025 MIMIC-IV study found readmission models using raw ICD codes hit
 # AUROC 0.97+, a strong signature of this exact leakage.
+# Numeric statistics derived from discharge summaries.
+#
+# The discharge summary is authored *at discharge*, so its length, sentence count,
+# medical-keyword count and negation count describe the entire admission. They are
+# not observable within a 24-hour window and act as a proxy for stay duration and
+# acuity.
+#
+# The strict lists previously excluded only the text columns themselves
+# (`text_clean`, `text_tfidf_ready`, `readability_flesch`, `note_type`) and let
+# these numeric derivatives through. In the Phase 1 Run C model they ranked 4th
+# (`sentence_count`, mean |SHAP| 0.337) and 9th (`medical_keyword_count`, 0.181)
+# of 66 features — materially inflating a metric published as "strict 24h".
+DISCHARGE_NOTE_DERIVED = [
+    "sentence_count", "word_count", "char_count",
+    "medical_keyword_count", "negation_count",
+    "note_count", "note_id", "note_*",
+]
+
+# Count of distinct lab assays ordered across the whole admission: a full-stay
+# ordering-intensity proxy, not a 24-hour observation.
+FULL_STAY_LAB_COUNTERS = ["lab_unique_items", "lab_total_count"]
+
+# Drug-class flags from src/features/medication.py. These are computed as
+# ``groupby("hadm_id").max()`` over the *entire* prescriptions table with no time
+# filter, so they mean "prescribed at any point during the admission" — the same
+# full-stay aggregation that already disqualifies `medication_count` and
+# `unique_medications` from the strict lists.
+#
+# `med_class_opioid` is the clearest offender: 94.8% of admissions ending in death
+# carry the flag versus 56.6% of survivors (1.68x). That gradient is comfort-care
+# prescribing — morphine given *because* care is being withdrawn — recorded days
+# after the 24-hour window closes. `med_class_statin` shows no such gradient
+# (0.93x), confirming the effect is specific to end-of-life drug classes rather
+# than a general "sicker patients receive more drugs" association.
+#
+# In Phase 1 Run C it ranked 1st of 62 features (mean |SHAP| 1.035 XGBoost,
+# 0.722 LightGBM), 1.6x the next feature.
+FULL_STAY_MED_CLASS = ["med_class_*"]
+
+# Whole-admission lab aggregates. src/features/laboratory.py uses `charttime` only
+# to *order* records, never to filter them, so `lab_wbc_max` is the maximum over
+# the entire stay and `lab_bicarbonate_min` for a patient dying of acidosis on day
+# 12 is the value measured as they die. Presenting these as a 24-hour observation
+# is the same defect as the note statistics, but larger: they were 30 of the 40
+# lab features surviving Run C, and `lab_bicarbonate_min` ranked 2nd by SHAP.
+#
+# `lab_*_first` is excluded here too, not because it leaks — 92.2% of first draws
+# fall inside 24h — but because `lab_*_first_24h` is the same value computed
+# inside an explicit window, so keeping both would merely duplicate the column.
+#
+# The strict protocols consume WINDOWED_LAB_FEATURES instead; see
+# :func:`src.features.laboratory.build_lab_features_windowed`.
+FULL_STAY_LAB_AGGREGATES = [
+    "lab_*_min", "lab_*_max", "lab_*_median", "lab_*_first",
+]
+
+# The 24h-windowed counterparts. Full-stay protocols (mortality Run A/B,
+# readmission Run A) exclude these so their feature sets stay exactly as they were
+# before the window was introduced, keeping their metrics comparable with the
+# pre-correction baseline snapshots.
+WINDOWED_LAB_FEATURES = ["lab_*_24h"]
+
+
 MORTALITY_EXCLUDE = [
     # Direct outcome and duration leakage
     "deathtime", "dischtime", "discharge_location", "los_days", "los_hours", "dod",
@@ -48,11 +111,15 @@ MORTALITY_EXCLUDE_RUN_C = MORTALITY_EXCLUDE + [
     "first_careunit", "last_careunit", "intime", "outtime",
     # Clinical notes and text readability features
     "note_type", "charttime", "text_clean", "readability_flesch", "text_tfidf_ready",
-]
+] + DISCHARGE_NOTE_DERIVED + FULL_STAY_LAB_COUNTERS + FULL_STAY_MED_CLASS + FULL_STAY_LAB_AGGREGATES
+
+# Run B (full-stay, leak-free). Kept separate from MORTALITY_EXCLUDE because
+# MORTALITY_EXCLUDE_RUN_C inherits that list and must *keep* the windowed columns.
+MORTALITY_EXCLUDE_RUN_B = MORTALITY_EXCLUDE + WINDOWED_LAB_FEATURES
 
 READMISSION_EXCLUDE = [
     "next_admittime", "days_to_readmission", "deathtime", "dischtime", "discharge_location",
-]
+] + WINDOWED_LAB_FEATURES
 
 # Strict 24h Early Observation Window Readmission Filter (Living Cohort + 24h Window Discipline)
 READMISSION_EXCLUDE_STRICT = [
@@ -68,7 +135,7 @@ READMISSION_EXCLUDE_STRICT = [
     "note_type", "charttime", "text_clean", "readability_flesch", "text_tfidf_ready",
     # Post-hoc ICU stay accumulation metrics
     "icu_los_days", "n_icu_stays", "has_icu_stay", "icu_*",
-]
+] + DISCHARGE_NOTE_DERIVED + FULL_STAY_LAB_COUNTERS + FULL_STAY_MED_CLASS + FULL_STAY_LAB_AGGREGATES
 
 # icu_* / fluids_* / vitals_* features are only populated for admissions that
 # already had an ICU stay — using them to predict ICU admission is leaking
@@ -97,7 +164,7 @@ ICU_ADMISSION_EXCLUDE_STRICT = ICU_ADMISSION_EXCLUDE + [
     "intime", "outtime",
     # Clinical notes and text readability features
     "note_type", "charttime", "text_clean", "readability_flesch", "text_tfidf_ready",
-]
+] + DISCHARGE_NOTE_DERIVED + FULL_STAY_LAB_COUNTERS + FULL_STAY_LAB_AGGREGATES
 
 LOS_EXCLUDE = [
     "dischtime", "discharge_location", "deathtime",
@@ -125,7 +192,7 @@ LOS_EXCLUDE_STRICT = LOS_EXCLUDE + [
     "first_careunit", "last_careunit", "intime", "outtime",
     # Clinical notes and text readability features
     "note_type", "charttime", "text_clean", "readability_flesch", "text_tfidf_ready",
-]
+] + DISCHARGE_NOTE_DERIVED + FULL_STAY_LAB_COUNTERS + FULL_STAY_LAB_AGGREGATES
 
 DETERIORATION_EXCLUDE = [
     "dischtime", "deathtime", "discharge_location", "dod", "los_days", "los_hours",
@@ -149,7 +216,7 @@ DETERIORATION_EXCLUDE_STRICT = DETERIORATION_EXCLUDE + [
     "lab_*_median", "lab_*_last", "lab_*_max", "lab_*_min", "lab_*_std", "lab_*_slope", "lab_*_change",
     # Clinical notes and text readability features
     "note_type", "charttime", "text_clean", "readability_flesch", "text_tfidf_ready",
-]
+] + DISCHARGE_NOTE_DERIVED + FULL_STAY_LAB_COUNTERS + FULL_STAY_MED_CLASS + FULL_STAY_LAB_AGGREGATES
 
 
 def match_column_patterns(columns: List[str], patterns: List[str]) -> List[str]:

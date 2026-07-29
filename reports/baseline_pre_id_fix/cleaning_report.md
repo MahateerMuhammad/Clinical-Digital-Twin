@@ -8,25 +8,25 @@ Generated: 2026-07-19T19:35:01.814489Z
 
 | table            |   n_actions | output_path                                                                            |   rows_before |   rows_after |   dup_before |   dup_after |
 |:-----------------|------------:|:---------------------------------------------------------------------------------------|--------------:|-------------:|-------------:|------------:|
-| patients         |           1 | data/interim/patients_clean.parquet         |        364627 |       364627 |            0 |           0 |
-| admissions       |          15 | data/interim/admissions_clean.parquet       |        546028 |       546028 |            0 |           0 |
-| diagnoses_icd    |           0 | data/interim/diagnoses_icd_clean.parquet    |       6364488 |      6364488 |            0 |           0 |
-| d_icd_diagnoses  |           0 | data/interim/d_icd_diagnoses_clean.parquet  |        112107 |       112107 |            0 |           0 |
-| procedures_icd   |           0 | data/interim/procedures_icd_clean.parquet   |        859655 |       859655 |            0 |           0 |
-| d_icd_procedures |           0 | data/interim/d_icd_procedures_clean.parquet |         86423 |        86423 |            0 |           0 |
-| d_labitems       |           1 | data/interim/d_labitems_clean.parquet       |          1650 |         1650 |            0 |           0 |
-| icustays         |           2 | data/interim/icustays_clean.parquet         |         94458 |        94458 |            0 |           0 |
-| d_items          |           4 | data/interim/d_items_clean.parquet          |          4095 |         4095 |            0 |           0 |
-| labevents        |          13 | data/interim/labevents_clean.parquet        |      50390218 |     50390218 |            0 |           0 |
-| prescriptions    |          24 | data/interim/prescriptions_clean.parquet    |      20292611 |     20292611 |            0 |           0 |
-| pharmacy         |          30 | data/interim/pharmacy_clean.parquet         |      17847567 |     17847567 |            0 |           0 |
-| emar             |          10 | data/interim/emar_clean.parquet             |      42808593 |     42808593 |            0 |           0 |
-| emar_detail      |          34 | data/interim/emar_detail_clean.parquet      |      87371064 |     87371064 |         4861 |        4861 |
-| chartevents      |           3 | data/interim/chartevents_clean.parquet      |      62862809 |     62862809 |            0 |           0 |
-| inputevents      |          11 | data/interim/inputevents_clean.parquet      |      10953713 |     10953713 |            0 |           0 |
-| outputevents     |           1 | data/interim/outputevents_clean.parquet     |       5359395 |      5359395 |            0 |           0 |
-| discharge        |           1 | data/interim/discharge_clean.parquet        |        331793 |       331793 |            0 |           0 |
-| radiology_detail |           0 | data/interim/radiology_detail_clean.parquet |       6046121 |      6046121 |            0 |           0 |
+| patients         |           1 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/patients_clean.parquet         |        364627 |       364627 |            0 |           0 |
+| admissions       |          15 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/admissions_clean.parquet       |        546028 |       546028 |            0 |           0 |
+| diagnoses_icd    |           0 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/diagnoses_icd_clean.parquet    |       6364488 |      6364488 |            0 |           0 |
+| d_icd_diagnoses  |           0 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/d_icd_diagnoses_clean.parquet  |        112107 |       112107 |            0 |           0 |
+| procedures_icd   |           0 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/procedures_icd_clean.parquet   |        859655 |       859655 |            0 |           0 |
+| d_icd_procedures |           0 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/d_icd_procedures_clean.parquet |         86423 |        86423 |            0 |           0 |
+| d_labitems       |           1 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/d_labitems_clean.parquet       |          1650 |         1650 |            0 |           0 |
+| icustays         |           2 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/icustays_clean.parquet         |         94458 |        94458 |            0 |           0 |
+| d_items          |           4 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/d_items_clean.parquet          |          4095 |         4095 |            0 |           0 |
+| labevents        |          13 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/labevents_clean.parquet        |      50390218 |     50390218 |            0 |           0 |
+| prescriptions    |          24 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/prescriptions_clean.parquet    |      20292611 |     20292611 |            0 |           0 |
+| pharmacy         |          30 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/pharmacy_clean.parquet         |      17847567 |     17847567 |            0 |           0 |
+| emar             |          10 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/emar_clean.parquet             |      42808593 |     42808593 |            0 |           0 |
+| emar_detail      |          34 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/emar_detail_clean.parquet      |      87371064 |     87371064 |         4861 |        4861 |
+| chartevents      |           3 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/chartevents_clean.parquet      |      62862809 |     62862809 |            0 |           0 |
+| inputevents      |          11 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/inputevents_clean.parquet      |      10953713 |     10953713 |            0 |           0 |
+| outputevents     |           1 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/outputevents_clean.parquet     |       5359395 |      5359395 |            0 |           0 |
+| discharge        |           1 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/discharge_clean.parquet        |        331793 |       331793 |            0 |           0 |
+| radiology_detail |           0 | /Users/apple/Desktop/Clinical Digital Twin/data/interim/radiology_detail_clean.parquet |       6046121 |      6046121 |            0 |           0 |
 
 ## Documented Actions
 

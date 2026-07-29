@@ -118,7 +118,8 @@ class FeatureBuilder:
         """Merge all hadm_id-level features onto admissions."""
         result = admissions.copy()
         hadm_features = [
-            "diagnosis", "procedure", "laboratory", "medication", "notes_admission",
+            "diagnosis", "procedure", "laboratory", "laboratory_24h",
+            "medication", "notes_admission",
         ]
         for name in hadm_features:
             if name in features and features[name] is not None and not features[name].empty:

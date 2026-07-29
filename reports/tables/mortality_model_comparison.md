@@ -3,24 +3,26 @@
 ## 1. Executive Summary & Leakage Protocol Audit
 
 > [!WARNING]
-> **Leakage Audit Flagged:** Run A (including diagnosis/Charlson ICD codes) achieved an AUROC > significantly higher (>0.05 gap) than Run B. In MIMIC-IV, ICD codes are assigned post-hoc at discharge. > Therefore, **Run B (diagnosis-derived features excluded) is reported as the primary, leak-free model.**
+> **Leakage Audit Flagged:** Run A (including diagnosis/Charlson ICD codes) achieved an AUROC > significantly higher (>0.05 gap) than the leak-free runs. In MIMIC-IV, ICD codes are assigned > post-hoc at discharge, so Run A is reported for audit purposes only and must not be quoted > as a performance result.
 
-**Primary Winning Model (Run B):** `LightGBM`
+**Headline result — Run C (24h Window):** `LightGBM`
+
+> Run A retains post-hoc ICD codes and is an upper bound under leakage, not a result. Run B removes diagnosis-derived features. **Run C additionally enforces the strict 24-hour observation window and is the figure quoted throughout the rest of the project.**
 
 ## 2. Test Set Performance Comparison Table
 
 | Model | Feature Set | AUROC | AUPRC | Base Rate AUPRC | Brier Score | Decision Threshold | F1 | Precision | Recall |
 |:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **XGBoost** | Run A (With ICD) | **0.9932** | **0.8076** | 0.0216 | 0.0276 | 0.9074 | 0.7337 | 0.6704 | 0.8103 |
-| **LightGBM** | Run A (With ICD) | **0.9940** | **0.8303** | 0.0216 | 0.0191 | 0.9066 | 0.7577 | 0.7056 | 0.8181 |
-| **Logistic Regression** | Run A (With ICD) | **0.9872** | **0.6714** | 0.0216 | 0.0422 | 0.8874 | 0.6271 | 0.5067 | 0.8226 |
-| **XGBoost** | Run B (Leak-Free) | **0.9818** | **0.7130** | 0.0216 | 0.0424 | 0.8020 | 0.5909 | 0.4651 | 0.8097 |
-| **LightGBM** | Run B (Leak-Free) | **0.9835** | **0.7331** | 0.0216 | 0.0343 | 0.8110 | 0.6203 | 0.5005 | 0.8153 |
-| **Logistic Regression** | Run B (Leak-Free) | **0.9711** | **0.5572** | 0.0216 | 0.0622 | 0.8016 | 0.4834 | 0.3433 | 0.8170 |
-| **XGBoost** | Run C (24h Window) | **0.9488** | **0.4540** | 0.0216 | 0.0826 | 0.6876 | 0.3026 | 0.1875 | 0.7840 |
-| **LightGBM** | Run C (24h Window) | **0.9490** | **0.4706** | 0.0216 | 0.0751 | 0.6701 | 0.3094 | 0.1925 | 0.7879 |
-| **Logistic Regression** | Run C (24h Window) | **0.9379** | **0.3581** | 0.0216 | 0.1037 | 0.6758 | 0.2668 | 0.1606 | 0.7879 |
-| **LightGBM (Calibrated)** | Run C (24h Window) | **0.9484** | **0.4554** | 0.0216 | 0.0150 | 0.0548 | 0.2970 | 0.1819 | 0.8086 |
+| **XGBoost** | Run A (With ICD) | **0.9961** | **0.8917** | 0.0216 | 0.0169 | 0.9308 | 0.8239 | 0.8351 | 0.8131 |
+| **LightGBM** | Run A (With ICD) | **0.9966** | **0.9035** | 0.0216 | 0.0109 | 0.9373 | 0.8313 | 0.8591 | 0.8053 |
+| **Logistic Regression** | Run A (With ICD) | **0.9918** | **0.7883** | 0.0216 | 0.0293 | 0.9406 | 0.7320 | 0.6713 | 0.8047 |
+| **XGBoost** | Run B (Leak-Free) | **0.9907** | **0.8424** | 0.0216 | 0.0223 | 0.8581 | 0.7782 | 0.7448 | 0.8148 |
+| **LightGBM** | Run B (Leak-Free) | **0.9917** | **0.8556** | 0.0216 | 0.0165 | 0.8733 | 0.7938 | 0.7734 | 0.8153 |
+| **Logistic Regression** | Run B (Leak-Free) | **0.9825** | **0.7114** | 0.0216 | 0.0415 | 0.8855 | 0.6494 | 0.5426 | 0.8086 |
+| **XGBoost** | Run C (24h Window) | **0.9035** | **0.3122** | 0.0216 | 0.1060 | 0.5112 | 0.1779 | 0.1005 | 0.7722 |
+| **LightGBM** | Run C (24h Window) | **0.9062** | **0.3281** | 0.0216 | 0.0957 | 0.4794 | 0.1812 | 0.1026 | 0.7767 |
+| **Logistic Regression** | Run C (24h Window) | **0.8938** | **0.2265** | 0.0216 | 0.1281 | 0.5251 | 0.1637 | 0.0914 | 0.7846 |
+| **LightGBM (Calibrated)** | Run C (24h Window) | **0.9059** | **0.3131** | 0.0216 | 0.0172 | 0.0261 | 0.1749 | 0.0984 | 0.7868 |
 
 ## 3. Clinical Decision Threshold Rationale
 
