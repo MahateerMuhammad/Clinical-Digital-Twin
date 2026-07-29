@@ -5,9 +5,9 @@
 This report evaluates PyTorch sequential models (**LSTM/GRU baseline** and an optimized **Transformer Encoder**) trained on multi-event 24-hour clinical trajectories (`time_series.parquet`) concatenated with 24-hour static presentation features (`admission_level_selected.parquet`) for in-hospital mortality prediction.
 
 ### Methodological Confirmations:
-1. **Identical Test Cohort**: Both sequence models were trained and evaluated on the **exact same held-out test subjects** ($N = 81,905$ test admissions across $15\%$ holdout patients) as Phase 1, loaded directly via [`data/processed/patient_split.parquet`](../data/processed/patient_split.parquet).
+1. **Identical Test Cohort**: Both sequence models were trained and evaluated on the **exact same held-out test subjects** ($N = 81,905$ test admissions across $15\%$ holdout patients) as Phase 1, loaded directly via [`data/processed/patient_split.parquet`](file:///Users/apple/Desktop/Clinical%20Digital%20Twin/data/processed/patient_split.parquet).
 2. **Phase 1 Run C Leak-Free Exclusion Standard**: Static tabular features concatenated with sequence vectors were filtered using **Phase 1's Run C leak-free exclusion list** (`MORTALITY_EXCLUDE_RUN_C`), dropping 112 post-hoc ICD codes (`dx_*`, `cci_*`), discharge duration proxies (`los_*`), and full-stay trajectory aggregates to ensure zero target leakage.
-3. **Worked Observation Window Verification**: Cell 3 in [`notebooks/07_sequence_model_kaggle.ipynb`](../notebooks/07_sequence_model_kaggle.ipynb) executed successfully, printing a worked patient observation example ($t \le 24.0\text{h}$) with relative event timestamps and cutoff verification.
+3. **Worked Observation Window Verification**: Cell 3 in [`notebooks/07_sequence_model_kaggle.ipynb`](file:///Users/apple/Desktop/Clinical%20Digital%20Twin/notebooks/07_sequence_model_kaggle.ipynb) executed successfully, printing a worked patient observation example ($t \le 24.0\text{h}$) with relative event timestamps and cutoff verification.
 
 ---
 

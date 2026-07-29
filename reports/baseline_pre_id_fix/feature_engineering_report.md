@@ -1,17 +1,17 @@
 # Feature Engineering Report
 
-Generated: 2026-07-28T11:22:34.806022Z
+Generated: 2026-07-20T11:42:18.697250Z
 
 ## Feature Selection Summary
 
-- **n_features_in**: 327
-- **n_features_out**: 196
-- **n_constant**: 4
-- **n_duplicate**: 1
-- **n_near_zero_variance**: 8
-- **n_high_missing**: 68
-- **n_highly_correlated_pairs**: 190
-- **n_dropped**: 131
+- **n_features_in**: 328
+- **n_features_out**: 179
+- **n_constant**: 3
+- **n_duplicate**: 6
+- **n_near_zero_variance**: 10
+- **n_high_missing**: 85
+- **n_highly_correlated_pairs**: 182
+- **n_dropped**: 149
 
 ## Dropped Features (Categorized by Reason)
 
@@ -19,6 +19,18 @@ Generated: 2026-07-28T11:22:34.806022Z
 *(Note: In prior runs, all vitals/labs were dropped here due to the 1.5M row-cap bug. These are now true clinical drops.)*
 - icu_duration_days
 - icu_duration_hours
+- lab_anion_gap_change
+- lab_anion_gap_slope
+- lab_anion_gap_std
+- lab_bicarbonate_change
+- lab_bicarbonate_slope
+- lab_bicarbonate_std
+- lab_bun_change
+- lab_bun_slope
+- lab_bun_std
+- lab_chloride_change
+- lab_chloride_slope
+- lab_chloride_std
 - lab_chloride_wb_change
 - lab_chloride_wb_first
 - lab_chloride_wb_last
@@ -37,6 +49,7 @@ Generated: 2026-07-28T11:22:34.806022Z
 - lab_creatinine_wb_min
 - lab_creatinine_wb_slope
 - lab_creatinine_wb_std
+- lab_glucose_change
 - lab_glucose_poc_change
 - lab_glucose_poc_first
 - lab_glucose_poc_last
@@ -46,72 +59,41 @@ Generated: 2026-07-28T11:22:34.806022Z
 - lab_glucose_poc_min
 - lab_glucose_poc_slope
 - lab_glucose_poc_std
+- lab_glucose_slope
+- lab_glucose_std
 - lab_hematocrit_wb_change
 - lab_hematocrit_wb_first
 - lab_hematocrit_wb_last
 - lab_hematocrit_wb_max
 - lab_hematocrit_wb_mean
 - lab_hematocrit_wb_median
-- lab_hematocrit_wb_min
-- lab_hematocrit_wb_slope
-- lab_hematocrit_wb_std
-- lab_hemoglobin_wb_change
-- lab_hemoglobin_wb_first
-- lab_hemoglobin_wb_last
-- lab_hemoglobin_wb_max
-- lab_hemoglobin_wb_mean
-- lab_hemoglobin_wb_median
-- lab_hemoglobin_wb_min
-- lab_hemoglobin_wb_slope
-- lab_hemoglobin_wb_std
-- lab_potassium_wb_change
-- lab_potassium_wb_first
-- lab_potassium_wb_last
-- _... and 18 more_
+- _... and 35 more_
 
 ### Constant / Zero Variance
 - _invalid_time_order
 - _is_duplicate
 - _is_duplicate
 - cci_aids
+- lab_creatinine_wb_abnormal_count
 - lab_creatinine_wb_change
 - lab_creatinine_wb_slope
 - lab_creatinine_wb_std
+- lab_hematocrit_missing_ratio
 - lab_hematocrit_wb_abnormal_count
 - lab_hematocrit_wb_abnormal_count
+- lab_potassium_wb_slope
 - note_count
-- readability_flesch
-- readability_flesch
 
 ### Duplicates / Highly Correlated
 - admit_year
 - cci_renal_disease
 - char_count
+- char_count
+- char_count
+- char_count
 - diagnosis_count
 - icu_duration_hours
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
 - lab_anion_gap_mean
-- lab_anion_gap_missing_ratio
-- lab_anion_gap_missing_ratio
-- lab_anion_gap_missing_ratio
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
 - lab_bicarbonate_count
 - lab_bicarbonate_count
 - lab_bicarbonate_mean
@@ -125,13 +107,32 @@ Generated: 2026-07-28T11:22:34.806022Z
 - lab_bun_count
 - lab_bun_count
 - lab_bun_count
-- lab_bun_count
 - lab_bun_mean
 - lab_chloride_count
-- lab_chloride_count
-- lab_chloride_count
-- lab_chloride_count
-- lab_chloride_count
-- lab_chloride_count
-- lab_chloride_count
+- lab_chloride_mean
+- lab_chloride_missing_ratio
+- lab_chloride_wb_mean
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_count
+- lab_creatinine_mean
+- lab_creatinine_mean
+- lab_creatinine_mean
+- lab_creatinine_wb_first
+- lab_creatinine_wb_max
+- lab_creatinine_wb_max
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_mean
+- lab_creatinine_wb_median
 - _... and more_

@@ -32,10 +32,47 @@ def get_memory_mb(df: pd.DataFrame) -> float:
     return df.memory_usage(deep=True).sum() / 1_048_576
 
 
+#: float32 represents consecutive integers exactly only up to 2**24 (16,777,216).
+#: MIMIC-IV identifiers live well above that (hadm_id ~2.2e7, subject_id ~1.5e7),
+#: so downcasting an identifier to float32 rounds it to the nearest even value and
+#: silently destroys the join key.
+_FLOAT32_EXACT_INT_LIMIT = 2 ** 24
+
+#: Columns never to downcast to float32, regardless of dtype.
+_ID_COL_NAMES = {
+    "subject_id", "hadm_id", "stay_id", "icustay_id", "note_id", "itemid",
+    "labevent_id", "specimen_id", "pharmacy_id", "emar_id", "poe_id",
+    "transfer_id", "microevent_id", "orderid", "linkorderid",
+}
+
+
+def _is_identifier_column(df: pd.DataFrame, col: str) -> bool:
+    """Identify join keys that must never lose integer precision."""
+    name = str(col).lower()
+    if name in _ID_COL_NAMES or name.endswith("_id") or name == "id":
+        return True
+    # Unnamed identifier: integral values too large for float32 to hold exactly.
+    s = df[col].dropna()
+    if s.empty:
+        return False
+    try:
+        if s.abs().max() <= _FLOAT32_EXACT_INT_LIMIT:
+            return False
+        return bool((s % 1 == 0).all())
+    except (TypeError, ValueError):
+        return False
+
+
 def optimise_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     """
     Downcast numeric columns to the smallest safe dtype and convert
     low-cardinality object columns to ``category``.
+
+    Identifier columns are excluded from float downcasting. A nullable identifier
+    (e.g. ``labevents.hadm_id``, which is NaN for outpatient labs) arrives as
+    float64; casting it to float32 rounds every value above 2**24 to an even
+    number, which silently rewrote ~50% of admission IDs and detached half the
+    lab results from their admissions.
 
     Parameters
     ----------
@@ -44,12 +81,17 @@ def optimise_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Same data with reduced memory footprint.
+        Same data with reduced memory footprint and join keys preserved exactly.
     """
     original_mb = get_memory_mb(df)
 
     for col in df.select_dtypes(include=["int64"]).columns:
         col_min, col_max = df[col].min(), df[col].max()
+        if _is_identifier_column(df, col):
+            # int32 spans ±2.1e9 — ample for MIMIC ids — but never narrower.
+            if col_min >= np.iinfo(np.int32).min and col_max <= np.iinfo(np.int32).max:
+                df[col] = df[col].astype(np.int32)
+            continue
         if col_min >= np.iinfo(np.int8).min and col_max <= np.iinfo(np.int8).max:
             df[col] = df[col].astype(np.int8)
         elif col_min >= np.iinfo(np.int16).min and col_max <= np.iinfo(np.int16).max:
@@ -58,6 +100,19 @@ def optimise_dtypes(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].astype(np.int32)
 
     for col in df.select_dtypes(include=["float64"]).columns:
+        if _is_identifier_column(df, col):
+            # Integral but nullable → pandas nullable integer keeps the exact
+            # value and still halves the memory of float64.
+            s = df[col]
+            non_null = s.dropna()
+            if not non_null.empty and (non_null % 1 == 0).all():
+                lo, hi = non_null.min(), non_null.max()
+                if lo >= np.iinfo(np.int32).min and hi <= np.iinfo(np.int32).max:
+                    df[col] = s.astype("Int32")
+                else:
+                    df[col] = s.astype("Int64")
+            # otherwise leave as float64: exact for integers up to 2**53
+            continue
         df[col] = df[col].astype(np.float32)
 
     for col in df.select_dtypes(include=["object"]).columns:

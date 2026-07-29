@@ -137,7 +137,14 @@ def run():
     ]
 
     report_path = Path("reports/tables/readmission_model_comparison.md")
-    export_model_comparison_markdown(all_results, leakage_gap_detected=True, winning_model_name=winning_name, output_path=report_path)
+    export_model_comparison_markdown(
+        all_results,
+        leakage_gap_detected=True,
+        winning_model_name=winning_name,
+        output_path=report_path,
+        title="30-Day Unplanned Readmission Prediction — Model Comparison & Leakage Audit",
+        primary_protocol="Run B (Strict 24h)",
+    )
 
     # ── 7. Generate Figures & SHAP Explainability ──────────────────────────────
     print("\n[STEP 7] Generating Publication Plots & SHAP Explainability...")
