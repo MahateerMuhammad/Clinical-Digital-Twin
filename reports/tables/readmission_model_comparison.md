@@ -13,13 +13,13 @@
 
 | Model | Feature Set | AUROC | AUPRC | Base Rate AUPRC | Brier Score | Decision Threshold | F1 | Precision | Recall |
 |:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **LACE Clinical Score** | Clinical Baseline | **0.4994** | **0.2038** | 0.2047 | 0.1759 | 0.1111 | 0.3345 | 0.2059 | 0.8914 |
+| **LACE Clinical Score (modified E)** | Clinical Baseline | **0.6096** | **0.2836** | 0.2047 | 0.1994 | 0.1667 | 0.3521 | 0.2220 | 0.8512 |
 | **XGBoost** | Run A (Full-Stay) | **0.7291** | **0.4368** | 0.2047 | 0.2060 | 0.3962 | 0.4275 | 0.2912 | 0.8038 |
 | **LightGBM** | Run A (Full-Stay) | **0.7324** | **0.4407** | 0.2047 | 0.2044 | 0.3962 | 0.4309 | 0.2944 | 0.8030 |
 | **Logistic Regression** | Run A (Full-Stay) | **0.7081** | **0.4126** | 0.2047 | 0.2143 | 0.3949 | 0.4088 | 0.2735 | 0.8092 |
 | **XGBoost** | Run B (Strict 24h) | **0.7054** | **0.4160** | 0.2047 | 0.2125 | 0.3930 | 0.4057 | 0.2717 | 0.8007 |
 | **LightGBM** | Run B (Strict 24h) | **0.7072** | **0.4173** | 0.2047 | 0.2115 | 0.3919 | 0.4076 | 0.2732 | 0.8022 |
-| **Logistic Regression** | Run B (Strict 24h) | **0.6899** | **0.4004** | 0.2047 | 0.2185 | 0.3953 | 0.3929 | 0.2597 | 0.8064 |
+| **Logistic Regression** | Run B (Strict 24h) | **0.6899** | **0.4004** | 0.2047 | 0.2185 | 0.3950 | 0.3928 | 0.2595 | 0.8071 |
 | **LightGBM (Calibrated)** | Run B (Strict 24h) | **0.7067** | **0.4104** | 0.2047 | 0.1453 | 0.1482 | 0.4044 | 0.2693 | 0.8114 |
 
 ## 3. Clinical Decision Threshold Rationale

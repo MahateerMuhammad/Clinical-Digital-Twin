@@ -85,7 +85,7 @@ def run():
     df_test_b = df_filtered_b[df_filtered_b["split"] == "test"].copy()
     lace_test_probs = pipeline.compute_lace_score(df_test_b)
     thresh_lace = find_optimal_threshold(y_te_b, lace_test_probs, target_recall=0.80)
-    res_lace = evaluate_binary_predictions(y_te_b, lace_test_probs, threshold=thresh_lace, model_name="LACE Clinical Score", run_name="Clinical Baseline")
+    res_lace = evaluate_binary_predictions(y_te_b, lace_test_probs, threshold=thresh_lace, model_name="LACE Clinical Score (modified E)", run_name="Clinical Baseline")
 
     print(f"  LACE Index AUROC: {res_lace['auroc']:.4f} | AUPRC: {res_lace['auprc']:.4f}")
 
@@ -164,7 +164,7 @@ def run():
             f"LightGBM (Run B 24h) [AUC={res_lgb_b['auroc']:.3f}]": test_p_lgb_b,
             f"XGBoost (Run B 24h) [AUC={res_xgb_b['auroc']:.3f}]": test_p_xgb_b,
             f"LogReg (Run B 24h) [AUC={res_logreg_b['auroc']:.3f}]": test_p_logreg_b,
-            f"LACE Clinical Score [AUC={res_lace['auroc']:.3f}]": lace_test_probs,
+            f"LACE (modified E) [AUC={res_lace['auroc']:.3f}]": lace_test_probs,
         },
         base_rate=float(np.mean(y_te_b)),
         output_path=Path("reports/figures/readmission_roc_pr_curves.png"),

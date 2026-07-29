@@ -117,11 +117,11 @@ class LiveModelRunner:
         results['p_mortality'] = p_mort
         
         # Risk Tiering
-        if p_mort < 0.0094:
+        if p_mort < 0.0034:
             results['risk_tier'] = 'Tier 1: Low Risk'
-        elif p_mort < 0.1119:
+        elif p_mort < 0.0225:
             results['risk_tier'] = 'Tier 2: Moderate Risk'
-        elif p_mort < 0.2171:
+        elif p_mort < 0.0883:
             results['risk_tier'] = 'Tier 3: High Risk'
         else:
             results['risk_tier'] = 'Tier 4: Extreme Risk'
