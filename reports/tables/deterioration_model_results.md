@@ -10,9 +10,9 @@
 
 | Model              |   AUROC |   AUPRC |   Base Rate |   Brier Score Pre-Calib |   Brier Score Post-Calib |
 |:-------------------|--------:|--------:|------------:|------------------------:|-------------------------:|
-| LogisticRegression |  0.8625 |  0.3551 |      0.0595 |                  0.1479 |                 nan      |
-| XGBoost            |  0.8865 |  0.424  |      0.0595 |                  0.1361 |                 nan      |
-| LightGBM           |  0.8878 |  0.4302 |      0.0595 |                  0.1338 |                   0.0428 |
+| LogisticRegression |  0.7859 |  0.3178 |      0.0595 |                  0.1756 |                 nan      |
+| XGBoost            |  0.8178 |  0.3733 |      0.0595 |                  0.1685 |                 nan      |
+| LightGBM           |  0.8221 |  0.3735 |      0.0595 |                  0.1639 |                   0.0456 |
 
 ---
 *Report generated automatically by DeteriorationModelPipeline*

@@ -8,13 +8,13 @@ Both columns are evaluated on the **same held-out test patients**: `patient_spli
 
 | Model | Metric | Before | After | Δ |
 | :--- | :--- | ---: | ---: | ---: |
-| **Phase 1 Mortality — Run C (headline, strict 24h)** | AUROC | 0.9490 | 0.9490 | +0.0000 |
-| Phase 1 Mortality — Run B (full-stay, leak-free) | AUROC | 0.9835 | 0.9835 | +0.0000 |
-| Phase 1 Mortality — Run A (_leaky upper bound, not a result_) | AUROC | 0.9940 | 0.9940 | +0.0000 |
-| **Phase 2 Readmission — strict 24h (headline)** | AUROC | 0.7094 | 0.7094 | +0.0000 |
-| Phase 3 ICU admission | AUROC | 0.8469 | 0.8469 | +0.0000 |
-| Phase 4 Hospital LOS — Stage A | AUROC | 0.8114 | 0.8114 | +0.0000 |
-| Phase 5 Deterioration | AUROC | 0.8878 | 0.8878 | +0.0000 |
+| **Phase 1 Mortality — Run C (headline, strict 24h)** | AUROC | 0.9490 | 0.9062 | -0.0428 ⚠ |
+| Phase 1 Mortality — Run B (full-stay, leak-free) | AUROC | 0.9835 | 0.9917 | +0.0082 |
+| Phase 1 Mortality — Run A (_leaky upper bound, not a result_) | AUROC | 0.9940 | 0.9966 | +0.0026 |
+| **Phase 2 Readmission — strict 24h (headline)** | AUROC | 0.7094 | 0.7072 | -0.0022 |
+| Phase 3 ICU admission | AUROC | 0.8469 | 0.8969 | +0.0500 ↑ |
+| Phase 4 Hospital LOS — Stage A | AUROC | 0.8114 | 0.8350 | +0.0236 ↑ |
+| Phase 5 Deterioration | AUROC | 0.8878 | 0.8221 | -0.0657 ⚠ |
 
 ## Interpretation
 

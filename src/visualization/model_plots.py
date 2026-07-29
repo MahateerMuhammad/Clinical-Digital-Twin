@@ -176,11 +176,18 @@ def generate_shap_plots(
     tn_idx = np.where((y_test == 0) & (y_pred_binary == 0))[0]
     fp_idx = np.where((y_test == 0) & (y_pred_binary == 1))[0]
 
+    # Filenames must carry ``output_prefix``. These were hardcoded to
+    # "mortality_shap_*.png", so every phase overwrote the same three files and the
+    # figures named after Phase 1 actually held whichever phase ran last.
+    label = output_prefix.replace("_", " ")
     case_paths = {"summary": summary_path}
     cases = [
-        ("True Positive (Correctly Flagged Mortality Risk)", tp_idx, "mortality_shap_tp.png", "tp"),
-        ("True Negative (Correctly Identified Survivor)", tn_idx, "mortality_shap_tn.png", "tn"),
-        ("False Positive (False Alarm / High Risk Survivor)", fp_idx, "mortality_shap_fp.png", "fp"),
+        (f"True Positive (Correctly Flagged {label.title()} Risk)",
+         tp_idx, f"{output_prefix}_shap_tp.png", "tp"),
+        (f"True Negative (Correctly Identified Negative Case)",
+         tn_idx, f"{output_prefix}_shap_tn.png", "tn"),
+        (f"False Positive (False Alarm / High Risk Negative Case)",
+         fp_idx, f"{output_prefix}_shap_fp.png", "fp"),
     ]
 
     for title, idx_arr, fname, key in cases:

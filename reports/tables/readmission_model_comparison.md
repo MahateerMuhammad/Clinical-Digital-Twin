@@ -1,24 +1,26 @@
-# In-Hospital Mortality Prediction — Model Comparison & Leakage Audit
+# 30-Day Unplanned Readmission Prediction — Model Comparison & Leakage Audit
 
 ## 1. Executive Summary & Leakage Protocol Audit
 
 > [!WARNING]
-> **Leakage Audit Flagged:** Run A (including diagnosis/Charlson ICD codes) achieved an AUROC > significantly higher (>0.05 gap) than Run B. In MIMIC-IV, ICD codes are assigned post-hoc at discharge. > Therefore, **Run B (diagnosis-derived features excluded) is reported as the primary, leak-free model.**
+> **Leakage Audit Flagged:** Run A (including diagnosis/Charlson ICD codes) achieved an AUROC > significantly higher (>0.05 gap) than the leak-free runs. In MIMIC-IV, ICD codes are assigned > post-hoc at discharge, so Run A is reported for audit purposes only and must not be quoted > as a performance result.
 
-**Primary Winning Model (Run B):** `LightGBM`
+**Headline result — Run B (Strict 24h):** `LightGBM`
+
+> Run A retains post-hoc ICD codes and is an upper bound under leakage, not a result. Run B removes diagnosis-derived features. **Run C additionally enforces the strict 24-hour observation window and is the figure quoted throughout the rest of the project.**
 
 ## 2. Test Set Performance Comparison Table
 
 | Model | Feature Set | AUROC | AUPRC | Base Rate AUPRC | Brier Score | Decision Threshold | F1 | Precision | Recall |
 |:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **LACE Clinical Score** | Clinical Baseline | **0.4994** | **0.2038** | 0.2047 | 0.1759 | 0.1111 | 0.3345 | 0.2059 | 0.8914 |
-| **XGBoost** | Run A (Full-Stay) | **0.7273** | **0.4340** | 0.2047 | 0.2071 | 0.3995 | 0.4264 | 0.2906 | 0.8003 |
-| **LightGBM** | Run A (Full-Stay) | **0.7299** | **0.4371** | 0.2047 | 0.2056 | 0.3992 | 0.4301 | 0.2940 | 0.8004 |
-| **Logistic Regression** | Run A (Full-Stay) | **0.7033** | **0.4079** | 0.2047 | 0.2156 | 0.3941 | 0.4047 | 0.2700 | 0.8081 |
-| **XGBoost** | Run B (Strict 24h) | **0.7040** | **0.4131** | 0.2047 | 0.2149 | 0.3978 | 0.4049 | 0.2705 | 0.8047 |
-| **LightGBM** | Run B (Strict 24h) | **0.7094** | **0.4195** | 0.2047 | 0.2112 | 0.3925 | 0.4089 | 0.2742 | 0.8037 |
-| **Logistic Regression** | Run B (Strict 24h) | **0.6873** | **0.3987** | 0.2047 | 0.2191 | 0.3965 | 0.3905 | 0.2578 | 0.8052 |
-| **LightGBM (Calibrated)** | Run B (Strict 24h) | **0.7093** | **0.4115** | 0.2047 | 0.1450 | 0.1471 | 0.4016 | 0.2650 | 0.8294 |
+| **XGBoost** | Run A (Full-Stay) | **0.7291** | **0.4368** | 0.2047 | 0.2060 | 0.3962 | 0.4275 | 0.2912 | 0.8038 |
+| **LightGBM** | Run A (Full-Stay) | **0.7324** | **0.4407** | 0.2047 | 0.2044 | 0.3962 | 0.4309 | 0.2944 | 0.8030 |
+| **Logistic Regression** | Run A (Full-Stay) | **0.7081** | **0.4126** | 0.2047 | 0.2143 | 0.3949 | 0.4088 | 0.2735 | 0.8092 |
+| **XGBoost** | Run B (Strict 24h) | **0.7054** | **0.4160** | 0.2047 | 0.2125 | 0.3930 | 0.4057 | 0.2717 | 0.8007 |
+| **LightGBM** | Run B (Strict 24h) | **0.7072** | **0.4173** | 0.2047 | 0.2115 | 0.3919 | 0.4076 | 0.2732 | 0.8022 |
+| **Logistic Regression** | Run B (Strict 24h) | **0.6899** | **0.4004** | 0.2047 | 0.2185 | 0.3953 | 0.3929 | 0.2597 | 0.8064 |
+| **LightGBM (Calibrated)** | Run B (Strict 24h) | **0.7067** | **0.4104** | 0.2047 | 0.1453 | 0.1482 | 0.4044 | 0.2693 | 0.8114 |
 
 ## 3. Clinical Decision Threshold Rationale
 
