@@ -4,7 +4,11 @@
       "Bash(.venv/bin/python -m unittest tests.test_llm_grounding -v)",
       "Bash(.venv/bin/python -m unittest tests.test_rag_hardened)",
       "Bash(.venv/bin/python -m unittest tests.test_llm_grounding)",
-      "Bash(.venv/bin/python -c ' *)"
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(git fetch *)",
+      "Bash(git merge *)",
+      "Bash(git checkout *)",
+      "Bash(.venv/bin/python recompute_risk_tiers.py --write-report)"
     ]
   }
 }
