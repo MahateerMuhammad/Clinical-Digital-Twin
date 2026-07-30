@@ -12,13 +12,21 @@ This report evaluates PyTorch sequential models (**LSTM/GRU baseline** and a sma
 | :--- | :--- | :--- | :---: | :---: | :---: |
 | **Tabular Baseline (Phase 1)** | **LightGBM (Run C 24h)** | **24h Summary Aggregates + Static** | **0.9062** | **0.3281** | **0.0957** |
 | **Tabular Baseline (Phase 1)** | **Calibrated LightGBM** | **24h Summary Aggregates + Static** | **0.9059** | **0.3131** | **0.0172** |
-| **Sequential Deep Learning (Phase 6)** | **PyTorch LSTM / GRU** | **24h Event Trajectory + Static** | **0.9738** | **0.6933** | **0.0108** |
-| **Sequential Deep Learning (Phase 6)** | **PyTorch Transformer Encoder** | **24h Event Trajectory + Static** | **0.9740** | **0.6996** | **0.0106** |
+| **Sequential Deep Learning (Phase 6)** | **PyTorch LSTM / GRU** | **24h Event Trajectory + Static** | **0.8957** | **0.2988** | **0.0177** |
+| **Sequential Deep Learning (Phase 6)** | **PyTorch Transformer Encoder** | **24h Event Trajectory + Static** | **0.8970** | **0.3009** | **0.0176** |
 
 ---
 
 ## 3. Plain-Language Clinical & Methodological Conclusion
 
-1. **Tabular Feature Engineering Dominance:** Engineered 24-hour summary statistics (`min`, `max`, `mean`, `slope`, `last`, `missing_ratio`, all computed strictly inside the 24h window) processed by GBDTs (LightGBM/XGBoost) achieve **0.9062 AUROC**, matching or exceeding end-to-end sequential deep learning architectures (**0.9738** for LSTM, **0.9740** for Transformer).
-2. **Computational & Data Efficiency:** GBDT tabular baselines train in seconds without requiring GPU infrastructure or complex sequence padding/truncation, while capturing extreme physiological trajectories effectively.
-3. **Key Finding:** In-hospital mortality risk over a 24-hour observation window is primarily governed by physiological extremity (`min`/`max` vital derangements, acute renal/metabolic lab boundaries) and static baseline risk, for which summary feature engineering remains highly competitive against raw sequence modeling.
+1. **Verdict (computed, not asserted):** The tabular baseline holds: AUPRC 0.3281 vs 0.3009. Engineered 24h summaries capture what the raw event sequence offers, at a fraction of the compute.
+2. **Like-for-like comparison:** Both families now consume the *same* leak-free static
+feature set — `MORTALITY_EXCLUDE_RUN_C` is applied identically, so `lab_*_min/_max/_median`,
+`med_class_*` and the discharge-note statistics are denied to both. An earlier version of
+this notebook withheld those from the tabular baseline only, which inflated the sequence
+models by roughly the size of the leak and made the table non-comparable.
+3. **Computational cost:** GBDT baselines train in seconds on CPU with no sequence padding
+or GPU. Any sequence-model advantage must be weighed against that.
+4. **Interpretation:** Mortality risk over a 24-hour window is driven by physiological
+extremity within the window and static baseline risk. Whether the *ordering* of events adds
+signal beyond 24h summary statistics is exactly what the AUPRC column above answers
