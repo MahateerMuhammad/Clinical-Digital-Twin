@@ -268,9 +268,16 @@ grounding verifier correctly refused to emit a report quoting an ungroundable nu
 ## 9. Reproducing the audit
 
 ```bash
-python run_id_corruption_rebuild.py --audit    # damage report, read-only
-python run_id_corruption_rebuild.py --verify   # acceptance test
-python recompute_risk_tiers.py                 # tier cutoffs for the current model
-python promote_models.py                       # dry run: models/ -> models/best_models/
+python run_id_corruption_rebuild.py --audit             # damage report, read-only
+python run_id_corruption_rebuild.py --verify            # acceptance test
+python run_explainability_audit.py                      # Phase 8 SHAP + leakage screen
+python recompute_risk_tiers.py --write-report --patch   # Phase 9 tiers + report
+python promote_models.py                                # dry run: models/ -> best_models/
 ```
+
+`run_explainability_audit.py` is the standing regression test for this correction: it
+screens every model's SHAP top-15 against the removed families and fails loudly if one
+reappears. Both `reports/tables/explainability_audit.md` and
+`reports/tables/risk_stratification.md` previously had no generator and went stale
+silently after the retrain; both are now regenerated from the models on disk.
 
