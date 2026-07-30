@@ -26,9 +26,21 @@
    - **No representation** achieves a mortality-retrieval CI separated from the naive baseline. On this cohort, learned embeddings do not improve outcome-aligned twin retrieval over raw scaled features.
    - **Dual-Head Hybrid AE** reaches **1.04x** mortality enrichment (95% CI: 1.86%–2.67%), which overlaps the naive baseline CI (1.26%–1.94%).
 
-2. **Technique 5 as a Singular Outlier Model**:
-   Technique 5 is a singular outlier—the only technique that breaks the performance ceiling that the other six methods share. Its lower disease phenotype match rate ($34.0\%$) is a direct side effect of LightGBM's decision splits prioritizing acute risk derangements over chronic comorbidity codes.
+2. **Disease, laboratory & medication retrieval**:
+   Disease phenotype match spans only 2.3 percentage points across every space (best:
+   Multi-Task Triplet AE, 37.3%; naive raw features, 36.3%). Lab severity MAE is lowest
+   for **Naive Raw Features** (0.123) and medication Jaccard highest for the same space
+   (50.2%). Disease and medication labels (`cci_*`/`dx_*`/`med_class_*`) are withheld
+   from every encoder, so these figures measure generalisation rather than recall of an
+   input. An earlier version of this audit fed those labels to the encoders *and* scored
+   against them, reporting 71.7% disease match for the triplet space — that figure was
+   memorisation, not retrieval.
 
-3. **Complementary Tool Selection Based on Clinical Objective**:
-   - **Use Technique 7 ($Z_{\text{hybrid}}$)** when the attending clinician's objective is **presentation process matching** (disease diagnoses, 24h lab bounds, 24h medication classes).
-   - **Use Technique 5 ($Z_{\text{tree\_latent}}$)** when the attending clinician's objective is **mortality outcome risk alignment**.
+3. **What this means for twin retrieval**:
+   No learned space beats raw scaled features on outcome-aligned retrieval, and phenotype
+   matching is near-identical across all of them. The honest recommendation on this cohort
+   is to use the naive raw-feature space for twin retrieval, and to treat the learned
+   embeddings as dimensionality reduction rather than outcome alignment. The 32-dimensional
+   hybrid space remains useful for Level 5 evidence retrieval in the RAG layer, where the
+   benefit is compact nearest-neighbour lookup over 546,028 admissions rather than
+   outcome enrichment.

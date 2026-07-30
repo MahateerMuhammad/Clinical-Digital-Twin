@@ -1,7 +1,7 @@
 
 # Data Correction Notice — Identifier Precision Loss in Laboratory Joins
 
-**Status:** code corrected; data rebuilt; **models retrained 2026-07-29 (Phases 1–5)**
+**Status:** code corrected; data rebuilt; **all phases retrained — 1–5 on 2026-07-29, 6–7 on 2026-07-30**
 **Affects:** all model results published before 2026-07-29
 **Baseline (pre-correction) reports retained at:** `reports/baseline_pre_id_fix/`
 
@@ -11,10 +11,12 @@
 > [`tables/model_comparison_before_after.md`](tables/model_comparison_before_after.md).
 
 > [!IMPORTANT]
-> Three defects were corrected in this round, not one. The identifier fix **raised**
-> performance by restoring laboratory data to half the cohort; two separate leakage
-> fixes **lowered** it. The headline mortality figure moved 0.9490 → 0.9062 AUROC as
-> the net of these opposing effects. See §6.
+> Several distinct defects were corrected, not one. The identifier fix **raised**
+> performance by restoring laboratory data to half the cohort; the leakage fixes
+> **lowered** it. The headline mortality figure moved 0.9490 → 0.9062 AUROC as the
+> net of these opposing effects (§6). Phases 6 and 7 carried their own drifted copies
+> of the exclusion list and were corrected separately (§8) — Phase 6's conclusion
+> reversed, and Phase 7's positive result became a null one.
 
 ---
 
@@ -98,7 +100,7 @@ Any figure in the baseline reports that derives from laboratory features should 
 treated as superseded. This includes the Phase 1–5 performance tables, the Phase 8
 SHAP rankings, and the Phase 9 risk-tier cutoffs — the last of which are
 additionally hardcoded in `src/llm/model_runner.py` and quoted as system constants
-in `src/llm/report_composer.py`; both require updating to the new values.
+in `src/llm/report_composer.py`. Both have since been updated; see §7.
 
 ## 5. Related defect: test suite overwrote production data
 
@@ -111,13 +113,6 @@ fixtures and did not override that default, so **every execution of
 
 `clean_table` now defaults to `save=False`; only `src/data/pipeline.py` passes
 `save=True`. The three tables were restored during the rebuild.
-
-## 6. Reproducing the audit
-
-```bash
-python run_id_corruption_rebuild.py --audit    # damage report, read-only
-python run_id_corruption_rebuild.py --verify   # acceptance test
-```
 
 ---
 
@@ -212,3 +207,70 @@ Phase 9 tier cutoffs (`0.0094 / 0.1119 / 0.2171`, hardcoded in
 `src/llm/model_runner.py` and quoted in `src/llm/report_composer.py`) are the
 50th/80th/95th percentiles of the calibrated model's test predictions and are
 invalidated by any retrain. They must be recomputed after promotion.
+
+---
+
+## 8. Phases 6 & 7 (corrected 2026-07-30)
+
+Both Kaggle notebooks carried their own hand-copied `MORTALITY_EXCLUDE_RUN_C`, and
+both had drifted from `src/features/leakage_filters.py`.
+
+### Phase 6 — the sequence-vs-tabular comparison was not like-for-like
+
+The notebook's copy was missing 15 patterns, so the sequence models received static
+features (`lab_*_min/_max/_median/_first`, `med_class_*`, the discharge-note
+statistics) that the tabular baseline was denied. Correcting it changes the result:
+
+| Model | AUROC before | AUROC after | AUPRC before | AUPRC after |
+| :--- | ---: | ---: | ---: | ---: |
+| LSTM / GRU | 0.9738 | **0.8957** | 0.6933 | **0.2988** |
+| Transformer Encoder | 0.9740 | **0.8970** | 0.6996 | **0.3009** |
+| LightGBM tabular (Run C) | 0.9062 | 0.9062 | 0.3281 | 0.3281 |
+
+The leak was worth ~0.077 AUROC and ~0.39 AUPRC to the sequence models; the tabular
+baseline, which never had those features, is unchanged. The corrected conclusion is
+that engineered 24-hour summaries capture what raw event ordering offers, at a
+fraction of the compute — the opposite of what the previous report claimed, and the
+reason the tabular model is the one deployed.
+
+### Phase 7 — embeddings were graded on their own inputs
+
+`cci_*`, `dx_*` and `med_class_*` drive triplet mining and the retrieval metrics, but
+were also encoder inputs, so the embedding was scored on what it had memorised. They
+are now held as supervision only. Separately, six of the seven rows in the published
+benchmark table were hardcoded literals from an earlier run — `eval_7_techniques_full()`
+was called once. The table now reports only spaces measured in the run that produced it.
+
+| Space | Disease % | Lab MAE | Med Jaccard % | Mortality enrichment |
+| :--- | ---: | ---: | ---: | ---: |
+| Naive Raw Features | 36.3 | **0.123** | **50.2** | 0.73x |
+| Multi-Task Triplet AE | **37.3** | 0.182 | 49.8 | 0.79x |
+| LightGBM Tree-Leaf AE | 35.0 | 0.219 | 48.8 | 1.06x |
+| Dual-Head Hybrid AE | 36.1 | 0.200 | 49.7 | 1.04x |
+
+**No representation achieves a mortality-retrieval CI separated from the naive
+baseline.** Triplet disease match fell from a reported 71.7% to 37.3% once the labels
+were withheld from the encoder. On this cohort, learned patient embeddings do not
+improve outcome-aligned twin retrieval over raw scaled features; they remain useful as
+dimensionality reduction for Level 5 evidence lookup. This is a negative result from a
+correctly specified experiment, and supersedes the positive result from a broken one.
+
+### Consequence for the serving layer
+
+`src/llm/report_composer.py` held the Phase 9 tier rates in two places
+(`SYSTEM_CONSTANTS` and `TIER_CONTEXT`); updating one left the other stale and the
+grounding verifier correctly refused to emit a report quoting an ungroundable number.
+`TIER_CONTEXT` is now derived from `SYSTEM_CONSTANTS`. Tier 4 observed mortality is
+**21.52%**, not the 15.05% previously quoted.
+
+---
+
+## 9. Reproducing the audit
+
+```bash
+python run_id_corruption_rebuild.py --audit    # damage report, read-only
+python run_id_corruption_rebuild.py --verify   # acceptance test
+python recompute_risk_tiers.py                 # tier cutoffs for the current model
+python promote_models.py                       # dry run: models/ -> models/best_models/
+```
+
