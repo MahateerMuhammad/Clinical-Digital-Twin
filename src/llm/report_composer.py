@@ -28,27 +28,38 @@ from typing import Any, Dict, List, Optional, Sequence
 
 __all__ = ["ComposedReport", "compose_report"]
 
-# Tier boundaries from the Phase 9 risk-stratification audit
-# (reports/tables/risk_stratification.md, held-out test cohort N = 82,806).
-TIER_CONTEXT = {
-    "Tier 1: Low Risk": "observed in-hospital mortality 0.22% in this band on the held-out test cohort",
-    "Tier 2: Moderate Risk": "observed in-hospital mortality 1.04% in this band on the held-out test cohort",
-    "Tier 3: High Risk": "observed in-hospital mortality 4.38% in this band on the held-out test cohort",
-    "Tier 4: Extreme Risk": "observed in-hospital mortality 15.05% in this band on the held-out test cohort",
-}
+_TIER_NAMES = ("Tier 1: Low Risk", "Tier 2: Moderate Risk",
+               "Tier 3: High Risk", "Tier 4: Extreme Risk")
 
 #: Published constants this module may quote. They are grounded in the Phase 9
 #: audit rather than in the current patient's data, so the fact store must be told
 #: about them explicitly — otherwise the verifier correctly flags them as
 #: ungrounded. Callers building a fact store should pass these as extra numbers.
+#: Tier rates are recomputed by ``recompute_risk_tiers.py`` whenever Phase 1 is
+#: retrained — they are percentiles of a specific model's test predictions, so a
+#: retrain invalidates them. Values below are from the 2026-07-29 leak-free model
+#: (cutoffs 0.0034 / 0.0225 / 0.0883). The superseded set (0.22 / 1.04 / 4.38 /
+#: 15.05) came from the pre-correction model and understated Tier 4 by 6.5
+#: percentage points.
 SYSTEM_CONSTANTS: Dict[str, float] = {
-    "phase9_tier1_observed_mortality_pct": 0.22,
-    "phase9_tier2_observed_mortality_pct": 1.04,
-    "phase9_tier3_observed_mortality_pct": 4.38,
-    "phase9_tier4_observed_mortality_pct": 15.05,
+    "phase9_tier1_observed_mortality_pct": 0.09,
+    "phase9_tier2_observed_mortality_pct": 1.01,
+    "phase9_tier3_observed_mortality_pct": 3.91,
+    "phase9_tier4_observed_mortality_pct": 21.52,
     "phase4_hosp_los_threshold_days": 5.63,
     "phase4_icu_los_threshold_days": 4.18,
     "phase5_deterioration_window_hours": 6.0,
+}
+
+# Derived from SYSTEM_CONSTANTS so the prose can never drift from the fact store.
+# These were previously two hardcoded copies of the same four numbers; updating
+# one left the other stale, and the grounding verifier then correctly rejected the
+# report because the quoted rate was absent from the fact store.
+TIER_CONTEXT = {
+    name: (f"observed in-hospital mortality "
+           f"{SYSTEM_CONSTANTS[f'phase9_tier{i}_observed_mortality_pct']}% "
+           f"in this band on the held-out test cohort")
+    for i, name in enumerate(_TIER_NAMES, start=1)
 }
 
 TASK_LABELS = {
