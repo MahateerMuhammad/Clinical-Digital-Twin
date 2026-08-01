@@ -19,8 +19,8 @@
 
 ## 2. Method
 
-25 held-out test admissions (seed 13), each run through four arms —
-100 generations in 43s, LLM rephrasing
+100 held-out test admissions (seed 13), each run through four arms —
+400 generations in 69s, LLM rephrasing
 disabled.
 
 | Arm | What it tests |
@@ -30,19 +30,34 @@ disabled.
 | `alias` | diagnosis renamed to a clinical synonym — expect the same concept resolved |
 | `unknown` | nonsense diagnosis — expect graceful degradation, never a fabricated match |
 
-Laboratory values come from each admission's real `lab_*_24h` features. Vital signs are
-not present in the admission-level frame, so clinically normal constants are substituted
-(311 substitutions across 25 payloads); those fields therefore
-test the plumbing, not physiological discrimination.
+### Value provenance
+
+Of 1,400 clinical values across
+100 payloads, **565 (40.4%) were measured** — read
+from that admission's own `lab_*_24h` features — and
+835 were imputed as clinically normal constants.
+
+Imputation is concentrated in the five vital signs, which have no admission-level
+source: vitals are recorded per ICU stay and 84% of admissions never reach an ICU.
+Those fields test the plumbing, not physiological discrimination.
+
+An earlier version of this harness mapped every laboratory field onto column names
+that did not exist (`lab_creatinine_max_24h` and five siblings), so **every** value
+fell through to the constants below and all payloads were near-identical. Any result
+predating 2026-08-01 describes the corpus, not the cohort.
+
+Where the windowed build emits only first/last draws, the extreme is reduced from
+those points. Creatinine, BUN and platelets have a single in-window value each, so
+the "peak"/"lowest" field carries that one draw rather than a true extreme.
 
 ## 3. Per-arm results
 
 | Arm | N | Statuses | Generation modes | Grounding violations |
 | :--- | ---: | :--- | :--- | ---: |
-| `complete` | 25 | {'ok': 25} | {'deterministic': 25} | 0 |
-| `ablated` | 25 | {'incomplete_input': 25} | {'deterministic': 25} | 0 |
-| `alias` | 25 | {'ok': 25} | {'deterministic': 25} | 0 |
-| `unknown` | 25 | {'incomplete_input': 25} | {'deterministic': 25} | 0 |
+| `complete` | 100 | {'ok': 100} | {'deterministic': 100} | 0 |
+| `ablated` | 100 | {'incomplete_input': 100} | {'deterministic': 100} | 0 |
+| `alias` | 100 | {'ok': 100} | {'deterministic': 100} | 0 |
+| `unknown` | 100 | {'incomplete_input': 100} | {'deterministic': 100} | 0 |
 
 ## 4. Interpretation
 

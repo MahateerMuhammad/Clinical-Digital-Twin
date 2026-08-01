@@ -474,32 +474,34 @@ class LiveRealtimeMedicalRAGEngine:
         # not laboratory values, and the hybrid space is a concatenation of two heads,
         # only one of which this checkpoint represents.
         #
-        # A correct projection for an unseen patient requires the LightGBM leaf
-        # assignment, both encoder heads, and the two fitted scalers (`scaler_leaf`,
-        # `scaler_static`). The scalers were never exported from the Kaggle notebook,
-        # so that projection cannot be reconstructed here. Refusing is the only honest
-        # option — see the EmbeddingUnavailable below.
+        # The machinery for a correct projection now exists — `PatientProjector` runs
+        # both encoder heads in NumPy from the exported scalers and weights — but it
+        # cannot be driven from *this* input. It needs a full admission feature row:
+        # ~100 debiased encoder columns plus the complete Phase 1 booster space for
+        # the leaf assignment. An unseen-patient payload carries nine laboratory
+        # values, five vitals and two demographics, so better than 90% of the encoder
+        # input would be zero-filled — the same defect as the padding above, merely
+        # with correctly-shaped output, which makes it harder to notice rather than
+        # less wrong.
         #
-        # Level 5 twin retrieval remains available for admissions already *in* the
-        # cohort, where the embedding is looked up rather than inferred; see
-        # `ClinicalPromptBuilder.get_digital_twins`.
-        if self.w0_numpy is not None and self.embedding_dim_matches:
-            w0, b0 = self.w0_numpy, self.b0_numpy
-            padded_vec = np.zeros(w0.shape[1], dtype=np.float32)
-            padded_vec[:len(vec)] = vec
-            z = np.dot(w0, padded_vec) + b0
-            return z / (np.linalg.norm(z) + 1e-6)
+        # Level 5 twin retrieval is therefore available for admissions already in the
+        # cohort, where `ClinicalPromptBuilder.get_digital_twins` looks the embedding
+        # up or projects it from the real feature row, and unavailable for a bare
+        # payload. Refusing is the only honest option here.
+        del vec  # computed above for the disabled surrogate; deliberately unused
 
-
-        # No learned projection available. Previously this returned
-        # np.random.RandomState(hash(labs)).randn(32) — a random vector presented as
-        # a latent embedding, which downstream code then reported as a "similarity
-        # score" against real patients. Refusing is the only honest option.
+        # No digits in this message. It propagates into `twin_status`, which the
+        # composer renders into the report, and the grounding verifier checks every
+        # numeral against the fact store — so an explanatory figure here is flagged
+        # as an ungrounded number and the whole report is withheld. The count of
+        # encoder features belongs in the comment above, not in user-facing text.
         raise EmbeddingUnavailable(
-            "Phase 7 projection artifacts unavailable "
-            f"(expected {_ENCODER_WEIGHTS}, scaler_static.pkl and scaler_leaf.pkl in "
-            f"{self.models_dir}). Level 5 twin retrieval is disabled; no surrogate "
-            "embedding will be produced."
+            "Level 5 twin retrieval needs a full admission feature row, not an "
+            "unseen-patient payload: the Phase 7 encoder takes the full debiased "
+            "feature set and a payload supplies only labs, vitals and demographics. "
+            "Use ClinicalPromptBuilder.get_digital_twins with a hadm_id, or "
+            "src.llm.twin_projection.PatientProjector with an admission-level frame. "
+            "No surrogate embedding will be produced."
         )
 
     def find_disease_constrained_twin_notes(self, patient_payload, top_k=3):

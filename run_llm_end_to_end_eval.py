@@ -55,18 +55,41 @@ sys.path.insert(0, str(ROOT))
 
 OUT = ROOT / "reports" / "tables" / "llm_end_to_end_evaluation.md"
 
-#: Payload field  <-  column in admission_level_selected.parquet
-FIELD_MAP: Dict[str, str] = {
-    "presentation_labs.creatinine_max":  "lab_creatinine_max_24h",
-    "presentation_labs.bun_max":         "lab_bun_max_24h",
-    "presentation_labs.wbc_max":         "lab_wbc_max_24h",
-    "presentation_labs.bicarbonate_min": "lab_bicarbonate_min_24h",
-    "presentation_labs.sodium_min":      "lab_sodium_min_24h",
-    "presentation_labs.potassium_max":   "lab_potassium_max_24h",
-    "presentation_labs.platelets_min":   "lab_platelets_min_24h",
-    "presentation_labs.hematocrit_min":  "lab_hematocrit_min_24h",
-    "presentation_labs.glucose_max":     "lab_glucose_max_24h",
+#: Payload field  <-  (reducer, candidate columns) in admission_level_selected.parquet
+#:
+#: This was previously a flat map onto ``lab_creatinine_max_24h`` and eight siblings,
+#: **six of which have never existed in the schema**. Every lookup missed, so
+#: build_payload substituted the DEFAULTS below — meaning 100 "real admissions" were
+#: scored on the same population-normal constants, and the headline result described
+#: the corpus rather than the cohort.
+#:
+#: The windowed lab build does not emit the same aggregates for every analyte, so a
+#: single naming convention cannot work. Where a true in-window extreme exists
+#: (potassium, glucose) it is used directly. Where only first/last exist, the extreme
+#: is reduced from those two points — a genuine windowed min/max over the draws that
+#: are available, not a guess. Where only one point exists (creatinine, BUN,
+#: platelets) that value is used and the report says so, because calling a single
+#: admission draw a "peak" would overstate it.
+FIELD_SOURCES: Dict[str, Tuple[str, List[str]]] = {
+    "presentation_labs.creatinine_max":  ("max", ["lab_creatinine_first_24h"]),
+    "presentation_labs.bun_max":         ("max", ["lab_bun_first_24h"]),
+    "presentation_labs.wbc_max":         ("max", ["lab_wbc_first_24h", "lab_wbc_last_24h"]),
+    "presentation_labs.bicarbonate_min": ("min", ["lab_bicarbonate_first_24h",
+                                                  "lab_bicarbonate_last_24h"]),
+    "presentation_labs.sodium_min":      ("min", ["lab_sodium_first_24h",
+                                                  "lab_sodium_last_24h"]),
+    "presentation_labs.potassium_max":   ("max", ["lab_potassium_max_24h"]),
+    "presentation_labs.platelets_min":   ("min", ["lab_platelets_first_24h"]),
+    "presentation_labs.hematocrit_min":  ("min", ["lab_hematocrit_first_24h",
+                                                  "lab_hematocrit_last_24h"]),
+    "presentation_labs.glucose_max":     ("max", ["lab_glucose_max_24h"]),
 }
+
+#: Fields with no admission-level source at all. Vital signs are recorded per ICU
+#: stay, and 84% of admissions never reach an ICU, so there is nothing to read for
+#: the cohort as a whole. These are always imputed and always reported as such.
+ALWAYS_IMPUTED = ("vital_signs.sbp_min", "vital_signs.hr_max", "vital_signs.rr_max",
+                  "vital_signs.spo2_min", "vital_signs.temp_max")
 
 #: Fallbacks when a 24h column is absent or null for this admission. Values are
 #: clinically normal, and are recorded in the report so no reader mistakes them for
@@ -119,29 +142,43 @@ def _drop(d: dict, path: str) -> None:
     d.pop(keys[-1], None)
 
 
-def build_payload(row: pd.Series, diagnosis: str) -> Tuple[dict, int]:
-    """Construct a required-field-complete payload from a real admission."""
+def build_payload(row: pd.Series, diagnosis: str) -> Tuple[dict, Counter]:
+    """
+    Construct a required-field-complete payload from a real admission.
+
+    Returns the payload and a Counter recording, per field, whether the value was
+    ``measured`` (read from this admission) or ``imputed`` (a population-normal
+    constant). The split is reported so nobody can mistake the second for the first
+    again — the previous version returned only a total, and the total was ignored in
+    favour of a headline that implied every value came from a patient.
+    """
     p: dict = {}
-    imputed = 0
+    prov: Counter = Counter()
     _set(p, "demographics.age", float(row.get("anchor_age", 65) or 65))
     g = str(row.get("gender", "M"))
     _set(p, "demographics.gender", g if g in ("M", "F") else "M")
     _set(p, "primary_diagnosis", diagnosis)
 
-    for path, col in FIELD_MAP.items():
-        val = row.get(col, np.nan)
-        if val is None or (isinstance(val, float) and np.isnan(val)):
+    for path, (reducer, candidates) in FIELD_SOURCES.items():
+        values = []
+        for col in candidates:
+            v = row.get(col, np.nan)
+            if v is not None and not (isinstance(v, float) and np.isnan(v)):
+                values.append(float(v))
+        if values:
+            val = max(values) if reducer == "max" else min(values)
+            prov["measured"] += 1
+        else:
             val = DEFAULTS[path]
-            imputed += 1
+            prov["imputed"] += 1
         _set(p, path, round(float(val), 2))
 
-    for path in ("vital_signs.sbp_min", "vital_signs.hr_max", "vital_signs.rr_max",
-                 "vital_signs.spo2_min", "vital_signs.temp_max"):
+    for path in ALWAYS_IMPUTED:
         _set(p, path, DEFAULTS[path])
-        imputed += 1
+        prov["imputed"] += 1
 
     _set(p, "active_medications", [])
-    return p, imputed
+    return p, prov
 
 
 def summarise(results: List[Any]) -> Dict[str, Any]:
@@ -168,7 +205,8 @@ def main() -> int:
     np_rng = np.random.default_rng(args.seed)
 
     print("Loading cohort ...")
-    cols = ["hadm_id", "subject_id", "anchor_age", "gender", "split"] + list(FIELD_MAP.values())
+    lab_cols = [c for _, cands in FIELD_SOURCES.values() for c in cands]
+    cols = ["hadm_id", "subject_id", "anchor_age", "gender", "split"] + lab_cols
     adm = pd.read_parquet(ROOT / "data/processed/admission_level_selected.parquet")
     keep = [c for c in cols if c in adm.columns]
     adm = adm[keep]
@@ -190,13 +228,13 @@ def main() -> int:
     ablation_asked: List[bool] = []
     alias_ok: List[bool] = []
     unknown_safe: List[bool] = []
-    total_imputed = 0
+    provenance: Counter = Counter()
     t0 = time.time()
 
     for i, (_, row) in enumerate(sample.iterrows()):
         dx = rng.choice(DIAGNOSES)
-        payload, imputed = build_payload(row, dx)
-        total_imputed += imputed
+        payload, prov = build_payload(row, dx)
+        provenance += prov
         kw = dict(use_llm=not args.no_llm)
 
         r = pipe.generate(dict(payload), case_id=f"complete_{i}", **kw)
@@ -216,7 +254,14 @@ def main() -> int:
         al["primary_diagnosis"] = alias
         r3 = pipe.generate(al, case_id=f"alias_{i}", **kw)
         arms["alias"].append(r3)
-        alias_ok.append(r3.status in ("ok", "no_evidence") and r3.grounding.get("ok", True))
+        # `ok_no_evidence` is what pipeline.py actually sets when a report is
+        # generated and grounded but no document was retrieved; `no_evidence` is a
+        # status the pipeline has never emitted. The criterion therefore only ever
+        # passed when retrieval happened to succeed, and scored a correctly-handled
+        # alias as a failure whenever it did not — which is a retrieval outcome, not
+        # an alias-resolution one.
+        alias_ok.append(r3.status in ("ok", "ok_no_evidence")
+                        and r3.grounding.get("ok", True))
 
         # unknown: nonsense diagnosis must not produce a fabricated match
         un = {k: (dict(v) if isinstance(v, dict) else v) for k, v in payload.items()}
@@ -291,10 +336,26 @@ def main() -> int:
 | `alias` | diagnosis renamed to a clinical synonym — expect the same concept resolved |
 | `unknown` | nonsense diagnosis — expect graceful degradation, never a fabricated match |
 
-Laboratory values come from each admission's real `lab_*_24h` features. Vital signs are
-not present in the admission-level frame, so clinically normal constants are substituted
-({total_imputed} substitutions across {len(sample)} payloads); those fields therefore
-test the plumbing, not physiological discrimination.
+### Value provenance
+
+Of {provenance['measured'] + provenance['imputed']:,} clinical values across
+{len(sample):,} payloads, **{provenance['measured']:,} ({provenance['measured'] /
+max(1, provenance['measured'] + provenance['imputed']):.1%}) were measured** — read
+from that admission's own `lab_*_24h` features — and
+{provenance['imputed']:,} were imputed as clinically normal constants.
+
+Imputation is concentrated in the five vital signs, which have no admission-level
+source: vitals are recorded per ICU stay and 84% of admissions never reach an ICU.
+Those fields test the plumbing, not physiological discrimination.
+
+An earlier version of this harness mapped every laboratory field onto column names
+that did not exist (`lab_creatinine_max_24h` and five siblings), so **every** value
+fell through to the constants below and all payloads were near-identical. Any result
+predating 2026-08-01 describes the corpus, not the cohort.
+
+Where the windowed build emits only first/last draws, the extreme is reduced from
+those points. Creatinine, BUN and platelets have a single in-window value each, so
+the "peak"/"lowest" field carries that one draw rather than a true extreme.
 
 ## 3. Per-arm results
 
