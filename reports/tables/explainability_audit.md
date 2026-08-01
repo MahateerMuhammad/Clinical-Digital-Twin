@@ -27,123 +27,123 @@ aggregates and counters, post-hoc ICD coding, and outcome-adjacent duration fiel
 
 ### Phase 1 — In-hospital mortality
 
-*Protocol:* Run C (strict 24h window) · *Features available:* 163 · *Test rows:* 82,806
+*Protocol:* Run C (strict 24h window) · *Features available:* 164 · *Test rows:* 82,806
 
 Leakage screen: **CLEAN** — no feature in the top 15 matches a removed leak family.
 
 | Rank | Feature | Mean \|SHAP\| | Screen |
 | ---: | :--- | ---: | :--- |
-| 1 | `anchor_age` | 0.7504 |  |
-| 2 | `admission_type_EU OBSERVATION` | 0.5914 |  |
-| 3 | `admission_type_EW EMER.` | 0.3071 |  |
-| 4 | `lab_wbc_last_24h` | 0.2288 |  |
-| 5 | `lab_platelets_last_24h` | 0.1756 |  |
-| 6 | `lab_hemoglobin_first_24h` | 0.1546 |  |
-| 7 | `lab_bun_abnormal_count_24h` | 0.1446 |  |
-| 8 | `admission_type_DIRECT OBSERVATION` | 0.1399 |  |
-| 9 | `admit_hour` | 0.1291 |  |
-| 10 | `lab_total_count_24h` | 0.1121 |  |
-| 11 | `lab_bicarbonate_abnormal_count_24h` | 0.1111 |  |
-| 12 | `admission_location_PHYSICIAN REFERRAL` | 0.0951 |  |
-| 13 | `admission_type_SURGICAL SAME DAY ADMISSION` | 0.0903 |  |
-| 14 | `admission_location_TRANSFER FROM HOSPITAL` | 0.0883 |  |
-| 15 | `lab_hemoglobin_last_24h` | 0.0868 |  |
+| 1 | `diagnosis_count` | 0.8789 |  |
+| 2 | `anchor_age` | 0.6073 |  |
+| 3 | `admission_type_EW EMER.` | 0.3612 |  |
+| 4 | `procedure_count` | 0.3289 |  |
+| 5 | `admission_type_EU OBSERVATION` | 0.2749 |  |
+| 6 | `lab_wbc_last_24h` | 0.2318 |  |
+| 7 | `lab_creatinine_first_24h` | 0.2052 |  |
+| 8 | `lab_platelets_first_24h` | 0.1505 |  |
+| 9 | `admission_location_PHYSICIAN REFERRAL` | 0.1291 |  |
+| 10 | `lab_bun_first_24h` | 0.1180 |  |
+| 11 | `lab_anion_gap_last_24h` | 0.0963 |  |
+| 12 | `admission_type_SURGICAL SAME DAY ADMISSION` | 0.0944 |  |
+| 13 | `admit_hour` | 0.0875 |  |
+| 14 | `lab_hematocrit_first_24h` | 0.0842 |  |
+| 15 | `race_UNKNOWN` | 0.0687 |  |
 
 ### Phase 2 — 30-day unplanned readmission
 
-*Protocol:* Run B (strict 24h window) · *Features available:* 169 · *Test rows:* 81,019
+*Protocol:* Run B (strict 24h window) · *Features available:* 170 · *Test rows:* 81,019
 
 Leakage screen: **CLEAN** — no feature in the top 15 matches a removed leak family.
 
 | Rank | Feature | Mean \|SHAP\| | Screen |
 | ---: | :--- | ---: | :--- |
-| 1 | `prior_admissions_365d` | 0.1999 |  |
-| 2 | `prior_admissions_90d` | 0.1125 |  |
-| 3 | `prior_cumulative_los_days` | 0.0854 |  |
-| 4 | `lab_hemoglobin_last_24h` | 0.0601 |  |
-| 5 | `anchor_age` | 0.0536 |  |
-| 6 | `days_since_last_discharge` | 0.0522 |  |
-| 7 | `lab_platelets_last_24h` | 0.0471 |  |
-| 8 | `insurance_Private` | 0.0463 |  |
-| 9 | `race_UNKNOWN` | 0.0353 |  |
-| 10 | `lab_hemoglobin_first_24h` | 0.0337 |  |
-| 11 | `pre_admission_charlson_index` | 0.0306 |  |
-| 12 | `gender_M` | 0.0290 |  |
-| 13 | `admission_type_EU OBSERVATION` | 0.0277 |  |
-| 14 | `lab_wbc_last_24h` | 0.0228 |  |
-| 15 | `marital_status_SINGLE` | 0.0215 |  |
+| 1 | `prior_admissions_365d` | 0.1991 |  |
+| 2 | `diagnosis_count` | 0.1140 |  |
+| 3 | `prior_admissions_90d` | 0.1019 |  |
+| 4 | `prior_cumulative_los_days` | 0.0841 |  |
+| 5 | `procedure_count` | 0.0716 |  |
+| 6 | `anchor_age` | 0.0636 |  |
+| 7 | `days_since_last_discharge` | 0.0562 |  |
+| 8 | `lab_platelets_first_24h` | 0.0472 |  |
+| 9 | `lab_hematocrit_last_24h` | 0.0460 |  |
+| 10 | `race_UNKNOWN` | 0.0387 |  |
+| 11 | `insurance_Private` | 0.0382 |  |
+| 12 | `prior_admissions_30d` | 0.0289 |  |
+| 13 | `pre_admission_charlson_index` | 0.0277 |  |
+| 14 | `gender_M` | 0.0241 |  |
+| 15 | `lab_hematocrit_first_24h` | 0.0240 |  |
 
 ### Phase 3 — ICU admission risk
 
-*Protocol:* Admission-time (strict) · *Features available:* 169 · *Test rows:* 82,806
+*Protocol:* Admission-time (strict) · *Features available:* 170 · *Test rows:* 82,806
 
 Leakage screen: **CLEAN** — no feature in the top 15 matches a removed leak family.
 
 | Rank | Feature | Mean \|SHAP\| | Screen |
 | ---: | :--- | ---: | :--- |
-| 1 | `admission_type_EU OBSERVATION` | 0.8792 |  |
-| 2 | `lab_total_count_24h` | 0.4668 |  |
-| 3 | `admission_type_EW EMER.` | 0.2854 |  |
-| 4 | `admission_type_DIRECT OBSERVATION` | 0.1601 |  |
-| 5 | `lab_wbc_last_24h` | 0.1562 |  |
-| 6 | `lab_unique_items_24h` | 0.1546 |  |
-| 7 | `anchor_age` | 0.1430 |  |
-| 8 | `admission_location_TRANSFER FROM HOSPITAL` | 0.1340 |  |
-| 9 | `lab_bicarbonate_last_24h` | 0.0900 |  |
-| 10 | `lab_platelets_last_24h` | 0.0833 |  |
-| 11 | `lab_glucose_poc_missing_ratio_24h` | 0.0734 |  |
-| 12 | `admit_hour` | 0.0727 |  |
-| 13 | `anchor_year_group_2017 - 2019` | 0.0715 |  |
-| 14 | `anchor_year_group_2014 - 2016` | 0.0706 |  |
-| 15 | `anchor_year_group_2011 - 2013` | 0.0600 |  |
+| 1 | `admission_type_EU OBSERVATION` | 0.7316 |  |
+| 2 | `diagnosis_count` | 0.4797 |  |
+| 3 | `lab_total_count_24h` | 0.4316 |  |
+| 4 | `procedure_count` | 0.3890 |  |
+| 5 | `admission_type_EW EMER.` | 0.2861 |  |
+| 6 | `admission_location_TRANSFER FROM HOSPITAL` | 0.1199 |  |
+| 7 | `lab_wbc_last_24h` | 0.1155 |  |
+| 8 | `lab_bicarbonate_last_24h` | 0.1106 |  |
+| 9 | `admission_type_DIRECT OBSERVATION` | 0.1049 |  |
+| 10 | `lab_creatinine_first_24h` | 0.0945 |  |
+| 11 | `lab_unique_items_24h` | 0.0900 |  |
+| 12 | `days_since_last_discharge` | 0.0751 |  |
+| 13 | `lab_glucose_min_24h` | 0.0745 |  |
+| 14 | `admit_hour` | 0.0736 |  |
+| 15 | `lab_platelets_first_24h` | 0.0715 |  |
 
 ### Phase 4 — Hospital length of stay (Stage A)
 
-*Protocol:* Admission-time (strict) · *Features available:* 169 · *Test rows:* 82,806
+*Protocol:* Admission-time (strict) · *Features available:* 170 · *Test rows:* 82,806
 
 Leakage screen: **CLEAN** — no feature in the top 15 matches a removed leak family.
 
 | Rank | Feature | Mean \|SHAP\| | Screen |
 | ---: | :--- | ---: | :--- |
-| 1 | `admission_type_EU OBSERVATION` | 1.3251 |  |
-| 2 | `admission_type_DIRECT OBSERVATION` | 0.3104 |  |
-| 3 | `prior_cumulative_los_days` | 0.2300 |  |
-| 4 | `lab_total_count_24h` | 0.1492 |  |
-| 5 | `admit_hour` | 0.1244 |  |
-| 6 | `admission_location_EMERGENCY ROOM` | 0.0821 |  |
-| 7 | `lab_wbc_last_24h` | 0.0805 |  |
-| 8 | `anchor_age` | 0.0783 |  |
-| 9 | `days_since_last_discharge` | 0.0782 |  |
-| 10 | `lab_hemoglobin_last_24h` | 0.0745 |  |
-| 11 | `lab_glucose_first_24h` | 0.0659 |  |
-| 12 | `marital_status_MARRIED` | 0.0616 |  |
-| 13 | `admission_type_EW EMER.` | 0.0613 |  |
-| 14 | `lab_anion_gap_median_24h` | 0.0534 |  |
-| 15 | `lab_platelets_last_24h` | 0.0511 |  |
+| 1 | `admission_type_EU OBSERVATION` | 1.1676 |  |
+| 2 | `diagnosis_count` | 0.9656 |  |
+| 3 | `procedure_count` | 0.5230 |  |
+| 4 | `admission_type_DIRECT OBSERVATION` | 0.2600 |  |
+| 5 | `prior_cumulative_los_days` | 0.1199 |  |
+| 6 | `admit_hour` | 0.1071 |  |
+| 7 | `days_since_last_discharge` | 0.0948 |  |
+| 8 | `pre_admission_charlson_index` | 0.0926 |  |
+| 9 | `lab_platelets_first_24h` | 0.0524 |  |
+| 10 | `admission_type_SURGICAL SAME DAY ADMISSION` | 0.0507 |  |
+| 11 | `lab_creatinine_first_24h` | 0.0494 |  |
+| 12 | `admission_location_PROCEDURE SITE` | 0.0493 |  |
+| 13 | `admission_location_PHYSICIAN REFERRAL` | 0.0468 |  |
+| 14 | `marital_status_MARRIED` | 0.0420 |  |
+| 15 | `marital_status_SINGLE` | 0.0418 |  |
 
 ### Phase 5 — Clinical deterioration
 
-*Protocol:* Strict (6h horizon) · *Features available:* 86 · *Test rows:* 74,354
+*Protocol:* Strict (6h horizon) · *Features available:* 85 · *Test rows:* 74,354
 
 Leakage screen: **CLEAN** — no feature in the top 15 matches a removed leak family.
 
 | Rank | Feature | Mean \|SHAP\| | Screen |
 | ---: | :--- | ---: | :--- |
-| 1 | `lab_unique_items_24h` | 0.3990 |  |
-| 2 | `anchor_age` | 0.3653 |  |
-| 3 | `lab_total_count_24h` | 0.2102 |  |
-| 4 | `admit_hour` | 0.1576 |  |
-| 5 | `lab_wbc_last_24h` | 0.1267 |  |
-| 6 | `lab_glucose_abnormal_count_24h` | 0.0887 |  |
-| 7 | `lab_glucose_poc_missing_ratio_24h` | 0.0755 |  |
-| 8 | `lab_platelets_last_24h` | 0.0661 |  |
-| 9 | `lab_bicarbonate_last_24h` | 0.0548 |  |
-| 10 | `lab_hemoglobin_wb_missing_ratio_24h` | 0.0475 |  |
-| 11 | `lab_chloride_last_24h` | 0.0413 |  |
-| 12 | `lab_glucose_max_24h` | 0.0411 |  |
-| 13 | `lab_sodium_count_24h` | 0.0406 |  |
-| 14 | `lab_bun_abnormal_count_24h` | 0.0354 |  |
-| 15 | `lab_hemoglobin_first_24h` | 0.0311 |  |
+| 1 | `lab_unique_items_24h` | 0.3690 |  |
+| 2 | `anchor_age` | 0.3477 |  |
+| 3 | `lab_total_count_24h` | 0.2182 |  |
+| 4 | `admit_hour` | 0.1566 |  |
+| 5 | `lab_wbc_last_24h` | 0.1149 |  |
+| 6 | `lab_glucose_abnormal_count_24h` | 0.0954 |  |
+| 7 | `lab_bun_first_24h` | 0.0725 |  |
+| 8 | `lab_glucose_poc_missing_ratio_24h` | 0.0652 |  |
+| 9 | `lab_hematocrit_wb_count_24h` | 0.0645 |  |
+| 10 | `lab_platelets_first_24h` | 0.0632 |  |
+| 11 | `lab_bicarbonate_last_24h` | 0.0621 |  |
+| 12 | `lab_glucose_max_24h` | 0.0449 |  |
+| 13 | `lab_chloride_last_24h` | 0.0443 |  |
+| 14 | `lab_potassium_count_24h` | 0.0433 |  |
+| 15 | `lab_hematocrit_last_24h` | 0.0363 |  |
 
 ## 4. Reading these rankings
 

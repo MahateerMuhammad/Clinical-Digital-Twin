@@ -11,10 +11,10 @@
 
 | Model Name | Run Protocol | AUROC | AUPRC | Base Rate AUPRC | Brier Score | Decision Threshold | F1 Score | Precision | Recall |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Logistic Regression** | Admission-Time | **0.8774** | **0.6355** | 0.1555 | 0.1437 | 0.4892 | 0.5294 | 0.3966 | 0.7959 |
-| **XGBoost** | Admission-Time | **0.8928** | **0.6795** | 0.1555 | 0.1329 | 0.4986 | 0.5587 | 0.4329 | 0.7877 |
-| **LightGBM** | Admission-Time | **0.8969** | **0.6875** | 0.1555 | 0.1296 | 0.5089 | 0.5703 | 0.4464 | 0.7893 |
-| **LightGBM (Calibrated)** | Admission-Time | **0.8968** | **0.6789** | 0.1555 | 0.0800 | 0.1789 | 0.5699 | 0.4456 | 0.7903 |
+| **Logistic Regression** | Admission-Time | **0.9046** | **0.6971** | 0.1555 | 0.1250 | 0.5167 | 0.5950 | 0.4758 | 0.7940 |
+| **XGBoost** | Admission-Time | **0.9186** | **0.7380** | 0.1555 | 0.1148 | 0.5507 | 0.6315 | 0.5248 | 0.7925 |
+| **LightGBM** | Admission-Time | **0.9219** | **0.7465** | 0.1555 | 0.1119 | 0.5674 | 0.6408 | 0.5385 | 0.7911 |
+| **LightGBM (Calibrated)** | Admission-Time | **0.9217** | **0.7384** | 0.1555 | 0.0710 | 0.2099 | 0.6406 | 0.5381 | 0.7913 |
 
 ## 3. Key Observations & Clinical Interpretations
 

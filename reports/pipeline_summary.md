@@ -1,7 +1,7 @@
 # Pipeline Summary
 
-Completed: 2026-07-20T11:47:18.231026Z
-Duration: 467.5 minutes
+Completed: 2026-08-01T11:57:03.248315Z
+Duration: 32.2 minutes
 Mode: full
 
 ## Tables Processed

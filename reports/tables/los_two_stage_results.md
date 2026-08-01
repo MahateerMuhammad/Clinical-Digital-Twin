@@ -13,14 +13,14 @@
 
 | Target | Model Name | Run Protocol | AUROC | AUPRC | Base Rate AUPRC | Brier Score | Decision Threshold | F1 | Precision | Recall |
 |:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Hospital LOS | **Logistic Regression** | Stage A (Admission-Time) | **0.8179** | **0.5570** | 0.2486 | 0.1809 | 0.5163 | 0.5738 | 0.4477 | 0.7985 |
-| Hospital LOS | **XGBoost** | Stage A (Admission-Time) | **0.8311** | **0.5878** | 0.2486 | 0.1746 | 0.5289 | 0.5876 | 0.4659 | 0.7953 |
-| Hospital LOS | **LightGBM** | Stage A (Admission-Time) | **0.8350** | **0.5958** | 0.2486 | 0.1723 | 0.5341 | 0.5931 | 0.4719 | 0.7981 |
-| Hospital LOS | **LightGBM (Calibrated)** | Stage A (Admission-Time) | **0.8349** | **0.5879** | 0.2486 | 0.1368 | 0.2689 | 0.5931 | 0.4716 | 0.7991 |
-| ICU LOS | **Logistic Regression** | Stage A (Admission-Time) | **0.6706** | **0.4025** | 0.2498 | 0.2271 | 0.4158 | 0.4476 | 0.3100 | 0.8050 |
-| ICU LOS | **XGBoost** | Stage A (Admission-Time) | **0.7012** | **0.4478** | 0.2498 | 0.2132 | 0.4093 | 0.4663 | 0.3286 | 0.8025 |
-| ICU LOS | **LightGBM** | Stage A (Admission-Time) | **0.7015** | **0.4500** | 0.2498 | 0.2082 | 0.3888 | 0.4655 | 0.3270 | 0.8078 |
-| ICU LOS | **LightGBM (Calibrated)** | Stage A (Admission-Time) | **0.7004** | **0.4372** | 0.2498 | 0.1685 | 0.1935 | 0.4619 | 0.3175 | 0.8473 |
+| Hospital LOS | **Logistic Regression** | Stage A (Admission-Time) | **0.8873** | **0.7356** | 0.2486 | 0.1403 | 0.5089 | 0.6628 | 0.5641 | 0.8034 |
+| Hospital LOS | **XGBoost** | Stage A (Admission-Time) | **0.8973** | **0.7527** | 0.2486 | 0.1343 | 0.5349 | 0.6768 | 0.5877 | 0.7978 |
+| Hospital LOS | **LightGBM** | Stage A (Admission-Time) | **0.9001** | **0.7576** | 0.2486 | 0.1323 | 0.5524 | 0.6845 | 0.5989 | 0.7985 |
+| Hospital LOS | **LightGBM (Calibrated)** | Stage A (Admission-Time) | **0.9001** | **0.7503** | 0.2486 | 0.1072 | 0.2852 | 0.6791 | 0.5775 | 0.8241 |
+| ICU LOS | **Logistic Regression** | Stage A (Admission-Time) | **0.8374** | **0.6689** | 0.2498 | 0.1618 | 0.3912 | 0.5895 | 0.4589 | 0.8237 |
+| ICU LOS | **XGBoost** | Stage A (Admission-Time) | **0.8527** | **0.6970** | 0.2498 | 0.1521 | 0.3999 | 0.6058 | 0.4781 | 0.8265 |
+| ICU LOS | **LightGBM** | Stage A (Admission-Time) | **0.8527** | **0.6962** | 0.2498 | 0.1489 | 0.3886 | 0.6095 | 0.4835 | 0.8243 |
+| ICU LOS | **LightGBM (Calibrated)** | Stage A (Admission-Time) | **0.8523** | **0.6830** | 0.2498 | 0.1239 | 0.1919 | 0.6037 | 0.4714 | 0.8392 |
 
 ## 3. Stage B — Short-Bucket Duration Regression Performance
 
@@ -29,14 +29,14 @@
 
 | Target | Model Name | Evaluation Protocol (Scope) | Sample Size (N) | MAE (days) | RMSE (days) | R² Score |
 |:---|:---|:---|:---:|:---:|:---:|:---:|
-| Hospital LOS | **LightGBM Regressor** | Predicted Short Bucket (Deployment Primary) | 47,924 | **1.3366** | **3.3196** | **0.1189** |
-| Hospital LOS | **XGBoost Regressor** | Predicted Short Bucket (Deployment Primary) | 47,924 | **1.3405** | **3.3202** | **0.1186** |
-| Hospital LOS | **LightGBM Regressor** | Actual Short Bucket (Optimistic Upper Bound) | 62,221 | **0.8306** | **1.0763** | **0.4825** |
-| Hospital LOS | **XGBoost Regressor** | Actual Short Bucket (Optimistic Upper Bound) | 62,221 | **0.8340** | **1.0796** | **0.4793** |
-| ICU LOS | **LightGBM Regressor** | Predicted Short Bucket (Deployment Primary) | 4,294 | **1.5351** | **4.2500** | **-0.0429** |
-| ICU LOS | **XGBoost Regressor** | Predicted Short Bucket (Deployment Primary) | 4,294 | **1.5350** | **4.2500** | **-0.0429** |
-| ICU LOS | **LightGBM Regressor** | Actual Short Bucket (Optimistic Upper Bound) | 9,660 | **0.7655** | **0.9339** | **0.0783** |
-| ICU LOS | **XGBoost Regressor** | Actual Short Bucket (Optimistic Upper Bound) | 9,660 | **0.7660** | **0.9339** | **0.0784** |
+| Hospital LOS | **LightGBM Regressor** | Predicted Short Bucket (Deployment Primary) | 53,429 | **1.0548** | **2.0101** | **0.2563** |
+| Hospital LOS | **XGBoost Regressor** | Predicted Short Bucket (Deployment Primary) | 53,429 | **1.0607** | **2.0140** | **0.2534** |
+| Hospital LOS | **LightGBM Regressor** | Actual Short Bucket (Optimistic Upper Bound) | 62,221 | **0.7963** | **1.0365** | **0.5201** |
+| Hospital LOS | **XGBoost Regressor** | Actual Short Bucket (Optimistic Upper Bound) | 62,221 | **0.8017** | **1.0411** | **0.5158** |
+| ICU LOS | **LightGBM Regressor** | Predicted Short Bucket (Deployment Primary) | 7,150 | **0.9669** | **1.7026** | **0.0170** |
+| ICU LOS | **XGBoost Regressor** | Predicted Short Bucket (Deployment Primary) | 7,150 | **0.9676** | **1.7037** | **0.0157** |
+| ICU LOS | **LightGBM Regressor** | Actual Short Bucket (Optimistic Upper Bound) | 9,660 | **0.7298** | **0.8990** | **0.1460** |
+| ICU LOS | **XGBoost Regressor** | Actual Short Bucket (Optimistic Upper Bound) | 9,660 | **0.7299** | **0.8989** | **0.1461** |
 
 ## 4. Key Observations & Framework Limitations
 

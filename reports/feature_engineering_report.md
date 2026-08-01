@@ -1,6 +1,6 @@
 # Feature Engineering Report
 
-Generated: 2026-07-29T08:17:06.437373Z
+Generated: 2026-08-01T11:51:22.941476Z
 
 ## Feature Selection Summary
 
@@ -10,7 +10,8 @@ Generated: 2026-07-29T08:17:06.437373Z
 - **n_duplicate**: 1
 - **n_near_zero_variance**: 14
 - **n_high_missing**: 167
-- **n_highly_correlated_pairs**: 411
+- **n_highly_correlated_pairs**: 160
+- **n_correlated_dropped**: 160
 - **n_dropped**: 290
 
 ## Dropped Features (Categorized by Reason)
@@ -91,54 +92,54 @@ Generated: 2026-07-29T08:17:06.437373Z
 - readability_flesch
 
 ### Duplicates / Highly Correlated
-- admit_year
-- cci_renal_disease
-- char_count
-- diagnosis_count
+- anchor_year
+- dx_ckd
 - icu_duration_hours
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count
-- lab_anion_gap_count_24h
-- lab_anion_gap_count_24h
-- lab_anion_gap_count_24h
-- lab_anion_gap_count_24h
-- lab_anion_gap_count_24h
-- lab_anion_gap_count_24h
-- lab_anion_gap_mean
 - lab_anion_gap_mean_24h
-- lab_anion_gap_mean_24h
-- lab_anion_gap_missing_ratio
-- lab_anion_gap_missing_ratio
-- lab_anion_gap_missing_ratio
-- lab_anion_gap_missing_ratio_24h
+- lab_anion_gap_median
+- lab_anion_gap_median_24h
 - lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count
-- lab_bicarbonate_count_24h
-- lab_bicarbonate_count_24h
-- lab_bicarbonate_count_24h
-- lab_bicarbonate_count_24h
 - lab_bicarbonate_count_24h
 - lab_bicarbonate_max_24h
-- lab_bicarbonate_mean
 - lab_bicarbonate_mean_24h
-- lab_bicarbonate_mean_24h
+- lab_bicarbonate_median
+- lab_bicarbonate_median_24h
+- lab_bicarbonate_min_24h
+- lab_bicarbonate_missing_ratio
+- lab_bicarbonate_missing_ratio_24h
+- lab_bun_count
+- lab_bun_count_24h
+- lab_bun_last_24h
+- lab_bun_max_24h
+- lab_bun_mean_24h
+- lab_bun_median
+- lab_bun_median_24h
+- lab_bun_min_24h
+- lab_chloride_count
+- lab_chloride_count_24h
+- lab_chloride_max_24h
+- lab_chloride_mean_24h
+- lab_chloride_median
+- lab_chloride_median_24h
+- lab_chloride_min_24h
+- lab_chloride_missing_ratio
+- lab_chloride_wb_max_24h
+- lab_chloride_wb_mean_24h
+- lab_chloride_wb_median
+- lab_chloride_wb_median_24h
+- lab_chloride_wb_min_24h
+- lab_creatinine_count
+- lab_creatinine_count_24h
+- lab_creatinine_last_24h
+- lab_creatinine_max
+- lab_creatinine_max_24h
+- lab_creatinine_mean
+- lab_creatinine_mean_24h
+- lab_creatinine_median
+- lab_creatinine_median_24h
+- lab_creatinine_min
+- lab_creatinine_min_24h
+- lab_creatinine_wb_last
+- lab_creatinine_wb_last_24h
+- lab_creatinine_wb_max
 - _... and more_
