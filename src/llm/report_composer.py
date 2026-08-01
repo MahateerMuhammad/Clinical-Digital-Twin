@@ -35,17 +35,21 @@ _TIER_NAMES = ("Tier 1: Low Risk", "Tier 2: Moderate Risk",
 #: audit rather than in the current patient's data, so the fact store must be told
 #: about them explicitly — otherwise the verifier correctly flags them as
 #: ungrounded. Callers building a fact store should pass these as extra numbers.
-#: Tier rates are recomputed by ``recompute_risk_tiers.py`` whenever Phase 1 is
-#: retrained — they are percentiles of a specific model's test predictions, so a
-#: retrain invalidates them. Values below are from the 2026-07-29 leak-free model
-#: (cutoffs 0.0034 / 0.0225 / 0.0883). The superseded set (0.22 / 1.04 / 4.38 /
-#: 15.05) came from the pre-correction model and understated Tier 4 by 6.5
-#: percentage points.
+#: Tier rates are percentiles of a specific model's test predictions, so a Phase 1
+#: retrain invalidates them. Do not edit these by hand — run
+#: ``recompute_risk_tiers.py --patch --write-report``, which rewrites both this dict
+#: and ``TIER_CUTOFFS`` below from the model on disk and regenerates
+#: ``reports/tables/risk_stratification.md`` from the same numbers.
+#:
+#: Current values are from the 2026-08-01 model (Run C AUROC 0.9442), trained after
+#: the feature-selection fix restored creatinine, BUN and haematocrit. Superseded
+#: sets, both of which understated Tier 4: 0.09 / 1.01 / 3.91 / 21.52 (2026-07-29)
+#: and 0.22 / 1.04 / 4.38 / 15.05 (pre-correction).
 SYSTEM_CONSTANTS: Dict[str, float] = {
-    "phase9_tier1_observed_mortality_pct": 0.09,
-    "phase9_tier2_observed_mortality_pct": 1.01,
-    "phase9_tier3_observed_mortality_pct": 3.91,
-    "phase9_tier4_observed_mortality_pct": 21.52,
+    "phase9_tier1_observed_mortality_pct": 0.01,
+    "phase9_tier2_observed_mortality_pct": 0.34,
+    "phase9_tier3_observed_mortality_pct": 3.79,
+    "phase9_tier4_observed_mortality_pct": 25.24,
     "phase4_hosp_los_threshold_days": 5.63,
     "phase4_icu_los_threshold_days": 4.18,
     "phase5_deterioration_window_hours": 6.0,
@@ -68,7 +72,7 @@ TIER_CONTEXT = {
 #: retyped. They previously existed only as three literals inside
 #: `LiveModelRunner.run_live_inference_with_uncertainty`, which is exactly how the
 #: superseded cutoffs survived a retrain and mislabelled every served patient.
-TIER_CUTOFFS: tuple[float, float, float] = (0.0034, 0.0225, 0.0883)
+TIER_CUTOFFS: tuple[float, float, float] = (0.0006, 0.0120, 0.1380)
 
 
 def tier_for_probability(p: float) -> str:

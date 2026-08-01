@@ -18,12 +18,12 @@ Queries: 2,000 sampled at random (seed 7); observed deaths
 
 | Metric | Value | Interpretation |
 | :--- | ---: | :--- |
-| Mortality AUROC | **0.7428** | ranking quality from retrieval alone, no model |
-| Mortality AUPRC | **0.2506** | 13.5x the 0.0185 base rate |
-| Top-decile observed mortality | **8.17%** | **4.42x** enrichment |
-| ICU-stay AUROC | 0.8392 | secondary outcome |
-| Mean twin distance | 1.815 | Euclidean, embedding space |
-| _Unconditional mean twin mortality_ | _0.0223_ | _1.21x — see §3_ |
+| Mortality AUROC | **0.8044** | ranking quality from retrieval alone, no model |
+| Mortality AUPRC | **0.3136** | 17.0x the 0.0185 base rate |
+| Top-decile observed mortality | **10.96%** | **5.93x** enrichment |
+| ICU-stay AUROC | 0.8608 | secondary outcome |
+| Mean twin distance | 1.936 | Euclidean, embedding space |
+| _Unconditional mean twin mortality_ | _0.0229_ | _1.24x — see §3_ |
 
 ## 3. Why this differs from the Phase 7 verdict
 
@@ -35,11 +35,11 @@ That statistic tends to 1.0 regardless of embedding quality. If the embedding wo
 neighbours of high-risk patients are high-risk and neighbours of low-risk patients are
 low-risk; averaging over a representative sample recovers the base rate. It cannot
 separate a good embedding from a random one, and this run reproduces it exactly
-(1.21x).
+(1.24x).
 
 Conditioning on the query reverses the picture: the same neighbours rank query mortality
-at AUROC 0.7428, and queries whose twins fall in the top decile of twin-mortality
-die at 8.17% against a 1.85% base rate. The embedding is informative;
+at AUROC 0.8044, and queries whose twins fall in the top decile of twin-mortality
+die at 10.96% against a 1.85% base rate. The embedding is informative;
 the Phase 7 metric was structurally unable to show it.
 
 This does not overturn Phase 7's *comparative* finding — that learned spaces did not

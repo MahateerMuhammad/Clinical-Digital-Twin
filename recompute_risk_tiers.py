@@ -6,10 +6,12 @@ Recompute the Phase 9 risk-tier cutoffs from the current calibrated mortality mo
 
 The four-tier scheme splits the held-out test set at the 50th, 80th and 95th
 percentiles of predicted probability. Those cutoffs are therefore a property of a
-*specific trained model*: any retrain invalidates them. They are hardcoded in
-``src/llm/model_runner.py`` and quoted as system constants in
-``src/llm/report_composer.py``, with nothing tying them back to the model, so they
-silently go stale — exactly what happened across the 2026-07-29 retrain.
+*specific trained model*: any retrain invalidates them. Both the cutoffs
+(``TIER_CUTOFFS``) and the published per-tier mortality rates (``SYSTEM_CONSTANTS``)
+live in ``src/llm/report_composer.py``, which ``model_runner`` imports — ``--patch``
+rewrites both from the model on disk, so neither can go stale independently. They did
+exactly that across the 2026-07-29 retrain, when the cutoffs were updated by hand and
+the rates were not.
 
 This script recomputes them from the model currently on disk and reports the tier
 statistics, so the published stratification can be regenerated without guesswork.
@@ -31,7 +33,9 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent
-RUNNER = ROOT / "src" / "llm" / "model_runner.py"
+#: The single home of the tier cutoffs and the published per-tier mortality rates.
+#: model_runner imports both from here rather than carrying its own copies.
+COMPOSER = ROOT / "src" / "llm" / "report_composer.py"
 
 #: Percentile boundaries of the published 4-tier scheme.
 TIER_PERCENTILES = (50, 80, 95)
@@ -42,7 +46,7 @@ TIER_NAMES = ("Tier 1: Low Risk", "Tier 2: Moderate Risk",
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--patch", action="store_true",
-                    help="rewrite the hardcoded cutoffs in src/llm/model_runner.py")
+                    help="rewrite TIER_CUTOFFS and SYSTEM_CONSTANTS in src/llm/report_composer.py")
     ap.add_argument("--write-report", action="store_true",
                     help="regenerate reports/tables/risk_stratification.md")
     args = ap.parse_args()
@@ -135,8 +139,9 @@ routine care while concentrating deaths into actionable tiers.
 {chr(10).join(rows)}
 | **Total** | 0 – 100th% | $[0.00% - 100.00%]$ | {len(y_test):,} | **100.0%** | {int(y_test.sum()):,} | 100.0% | **{base*100:.2f}%** | — | **1.00x** | Population baseline |
 
-Probability cutoffs: **{cuts[0]:.4f} / {cuts[1]:.4f} / {cuts[2]:.4f}** — mirrored in
-`src/llm/model_runner.py` and `SYSTEM_CONSTANTS` in `src/llm/report_composer.py`.
+Probability cutoffs: **{cuts[0]:.4f} / {cuts[1]:.4f} / {cuts[2]:.4f}** — held in
+`TIER_CUTOFFS` in `src/llm/report_composer.py`, alongside the observed rates above in
+`SYSTEM_CONSTANTS`. `model_runner` imports both; `--patch` keeps them in step.
 
 ## 3. Interpretation
 
@@ -154,21 +159,51 @@ expectation for each band.
         print(f"\nWritten → {out}")
 
     if not args.patch:
-        print("\nReport only. Re-run with --patch to rewrite src/llm/model_runner.py.")
+        print("\nReport only. Re-run with --patch to rewrite the constants in "
+              "src/llm/report_composer.py.")
         return 0
 
-    src = RUNNER.read_text(encoding="utf-8")
-    found = re.findall(r"p_mort < (\d\.\d+)", src)
-    if len(found) != 3:
-        print(f"\nExpected 3 cutoff comparisons in {RUNNER.name}, found {len(found)}. "
-              "Not patching — update by hand.", file=sys.stderr)
+    # Both the cutoffs and the observed per-tier rates live in report_composer, which
+    # model_runner imports. This used to rewrite `p_mort < 0.0034` literals inside
+    # model_runner and print "remember to update SYSTEM_CONSTANTS by hand" — a manual
+    # step that was, predictably, forgotten, leaving the served tiers and the quoted
+    # mortality rates describing two different models. Patching one file removes the
+    # opportunity to forget.
+    src = COMPOSER.read_text(encoding="utf-8")
+
+    rates = []
+    for i in range(len(TIER_NAMES)):
+        m = (probs >= edges[i]) & (probs < edges[i + 1])
+        n = int(m.sum())
+        rates.append(round((int(y_test[m].sum()) / n * 100) if n else 0.0, 2))
+
+    cut_pat = re.compile(
+        r"(TIER_CUTOFFS: tuple\[float, float, float\] = )\([^)]*\)")
+    if not cut_pat.search(src):
+        print(f"\nTIER_CUTOFFS not found in {COMPOSER.name} — update by hand.",
+              file=sys.stderr)
         return 1
-    for old, new in zip(found, cuts):
-        src = src.replace(f"p_mort < {old}", f"p_mort < {new:.4f}", 1)
-    RUNNER.write_text(src, encoding="utf-8")
-    print(f"\nPatched {RUNNER.relative_to(ROOT)}: {' / '.join(found)} "
-          f"→ {cuts[0]:.4f} / {cuts[1]:.4f} / {cuts[2]:.4f}")
-    print("Remember to update SYSTEM_CONSTANTS in src/llm/report_composer.py to match.")
+    src = cut_pat.sub(
+        rf"\g<1>({cuts[0]:.4f}, {cuts[1]:.4f}, {cuts[2]:.4f})", src, count=1)
+
+    old_rates = []
+    for i, rate in enumerate(rates, start=1):
+        key = f"phase9_tier{i}_observed_mortality_pct"
+        pat = re.compile(rf'("{key}":\s*)([\d.]+)')
+        m = pat.search(src)
+        if not m:
+            print(f"\n{key} not found in {COMPOSER.name} — update by hand.",
+                  file=sys.stderr)
+            return 1
+        old_rates.append(m.group(2))
+        src = pat.sub(rf"\g<1>{rate}", src, count=1)
+
+    COMPOSER.write_text(src, encoding="utf-8")
+    print(f"\nPatched {COMPOSER.relative_to(ROOT)}")
+    print(f"  cutoffs        → {cuts[0]:.4f} / {cuts[1]:.4f} / {cuts[2]:.4f}")
+    print(f"  observed rates   {' / '.join(old_rates)}  →  "
+          f"{' / '.join(f'{r}' for r in rates)}")
+    print("\nmodel_runner reads both from report_composer, so nothing else to update.")
     return 0
 
 

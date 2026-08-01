@@ -261,8 +261,18 @@ class ClinicalPromptBuilder:
         """
         patient_row = self.runner.get_patient_row(hadm_id)
         preds = self.runner.run_live_inference(patient_row)
-        twins = self.get_digital_twins(hadm_id, top_k=5)
         drivers = self._shap_drivers(patient_row)
+
+        # Twin evidence is the one optional block. Rebuilding the datasets rewrites
+        # similarity.parquet without dim_* columns until Phase 7 is re-run, and a
+        # missing evidence tier must not take the predictions and SHAP drivers down
+        # with it — the report degrades by saying the block is unavailable, which is
+        # the same contract rag_corpus follows for Level 5 evidence.
+        try:
+            twins = self.get_digital_twins(hadm_id, top_k=5)
+            twin_error = ""
+        except (ValueError, KeyError, FileNotFoundError) as exc:
+            twins, twin_error = [], str(exc)
 
         def num(col, default=float('nan')):
             return pd.to_numeric(patient_row.get(col, default), errors='coerce')
@@ -371,7 +381,8 @@ class ClinicalPromptBuilder:
                 '(AUROC 0.7253 on 3,000 queries) is weaker than the tabular model._',
             ]
         else:
-            parts.append('_Unavailable: this admission could not be embedded._')
+            parts.append(f'_Unavailable: {twin_error or "this admission could not be embedded"}. '
+                         'No twin evidence is substituted._')
 
         parts += ['', '---', '', '#### 5. RETRIEVED GUIDELINES & CITATIONS']
         if guidelines:

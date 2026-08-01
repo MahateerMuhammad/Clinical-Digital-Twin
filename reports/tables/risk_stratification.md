@@ -8,7 +8,7 @@
 ## 1. Scope
 
 Built from the winning **Phase 1 Calibrated LightGBM** mortality model
-(strict 24-hour observation window, AUROC **0.9059**, AUPRC **0.3131**),
+(strict 24-hour observation window, AUROC **0.9438**, AUPRC **0.3608**),
 evaluated on the held-out test split (*N* = 82,806 admissions, base mortality
 rate **2.16%**, 1,787 observed deaths).
 
@@ -25,14 +25,15 @@ routine care while concentrating deaths into actionable tiers.
 
 | Risk Tier | Percentile Range | Predicted Probability | Admissions ($N$) | Cohort Share | Deaths | Share of Deaths | Observed Mortality | 95% Bootstrap CI | Enrichment | Recommended Action |
 | :--- | :---: | :---: | ---: | ---: | ---: | ---: | ---: | :---: | ---: | :--- |
-| **Tier 1: Low Risk** | 0 – 50th% | $[0.00% - 0.34%)$ | 40,366 | **48.7%** | 36 | 2.0% | **0.09%** | **0.06% – 0.12%** | **0.04x** | General Ward / Routine Floor Care |
-| **Tier 2: Moderate Risk** | 50 – 80th% | $[0.34% - 2.25%)$ | 23,378 | **28.2%** | 235 | 13.2% | **1.01%** | **0.88% – 1.13%** | **0.47x** | Standard Telemetry & Continuous Vitals |
-| **Tier 3: High Risk** | 80 – 95th% | $[2.25% - 8.83%)$ | 14,685 | **17.7%** | 574 | 32.1% | **3.91%** | **3.59% – 4.21%** | **1.81x** | Step-Down / Progressive Care Unit |
-| **Tier 4: Extreme Risk** | Top 5% (95–100th%) | $[8.83% - 100.00%)$ | 4,377 | **5.3%** | 942 | 52.7% | **21.52%** | **20.36% – 22.76%** | **9.97x** | Immediate ICU Consultation & Rapid Response |
+| **Tier 1: Low Risk** | 0 – 50th% | $[0.00% - 0.06%)$ | 39,001 | **47.1%** | 4 | 0.2% | **0.01%** | **0.00% – 0.02%** | **0.00x** | General Ward / Routine Floor Care |
+| **Tier 2: Moderate Risk** | 50 – 80th% | $[0.06% - 1.20%)$ | 24,427 | **29.5%** | 84 | 4.7% | **0.34%** | **0.27% – 0.43%** | **0.16x** | Standard Telemetry & Continuous Vitals |
+| **Tier 3: High Risk** | 80 – 95th% | $[1.20% - 13.80%)$ | 14,881 | **18.0%** | 564 | 31.6% | **3.79%** | **3.49% – 4.10%** | **1.76x** | Step-Down / Progressive Care Unit |
+| **Tier 4: Extreme Risk** | Top 5% (95–100th%) | $[13.80% - 100.00%)$ | 4,497 | **5.4%** | 1,135 | 63.5% | **25.24%** | **23.86% – 26.46%** | **11.70x** | Immediate ICU Consultation & Rapid Response |
 | **Total** | 0 – 100th% | $[0.00% - 100.00%]$ | 82,806 | **100.0%** | 1,787 | 100.0% | **2.16%** | — | **1.00x** | Population baseline |
 
-Probability cutoffs: **0.0034 / 0.0225 / 0.0883** — mirrored in
-`src/llm/model_runner.py` and `SYSTEM_CONSTANTS` in `src/llm/report_composer.py`.
+Probability cutoffs: **0.0006 / 0.0120 / 0.1380** — held in
+`TIER_CUTOFFS` in `src/llm/report_composer.py`, alongside the observed rates above in
+`SYSTEM_CONSTANTS`. `model_runner` imports both; `--patch` keeps them in step.
 
 ## 3. Interpretation
 

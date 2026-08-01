@@ -79,8 +79,20 @@ FULL_STAY_MED_CLASS = ["med_class_*"]
 # The strict protocols consume WINDOWED_LAB_FEATURES instead; see
 # :func:`src.features.laboratory.build_lab_features_windowed`.
 FULL_STAY_LAB_AGGREGATES = [
-    "lab_*_min", "lab_*_max", "lab_*_median", "lab_*_first",
+    "lab_*_mean", "lab_*_min", "lab_*_max", "lab_*_median", "lab_*_first",
 ]
+# ``lab_*_mean`` was missing from this list until 2026-08-01. It went unnoticed
+# because feature selection happened to drop the whole-stay mean columns for
+# unrelated reasons; once selection was corrected to preserve windowed labs, nine
+# of them survived and entered Run C, where `lab_wbc_mean`, `lab_bun_mean`,
+# `lab_glucose_mean`, `lab_bicarbonate_mean` and `lab_platelets_mean` immediately
+# appeared in the top ten SHAP features. A mean over the whole admission includes
+# values measured after the 24h window and up to the moment of death.
+#
+# The lesson is that this list must enumerate aggregate suffixes exhaustively
+# rather than by memory. The full vocabulary produced by the lab builder is:
+# count, mean, median, min, max, std, missing_ratio, abnormal_count, first, last,
+# slope, change. Every one is either excluded here or in MORTALITY_EXCLUDE_RUN_C.
 
 # The 24h-windowed counterparts. Full-stay protocols (mortality Run A/B,
 # readmission Run A) exclude these so their feature sets stay exactly as they were
