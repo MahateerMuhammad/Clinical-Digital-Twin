@@ -13,33 +13,105 @@ class ClinicalPromptBuilder:
     SHAP risk drivers (Phase 8), Risk Tiering (Phase 9), Digital Twin RAG evidence (Phase 7),
     and Plotly visual timeline linkages (Phase 10) into a structured LLM prompt.
     """
+    #: Columns holding the Phase 7 patient embedding (dim_0 .. dim_31).
+    EMBED_PREFIX = 'dim_'
+
     def __init__(self, data_dir='data/processed'):
         self.data_dir = data_dir
         self.runner = LiveModelRunner(data_dir=data_dir)
         self.sim_df = pd.read_parquet(os.path.join(data_dir, 'similarity.parquet'))
-        self.adm_df = pd.read_parquet(os.path.join(data_dir, 'admission_level_selected.parquet'))
+
+        # Outcome columns are the only thing needed from the admission frame. Reading
+        # the whole 3 GB file and scanning it once per twin made a five-twin lookup
+        # take minutes; this reads five columns and indexes them by hadm_id.
+        outcome_cols = ['hadm_id', 'hospital_expire_flag', 'has_icu_stay',
+                        'readmission_30d', 'los_days']
+        adm_path = os.path.join(data_dir, 'admission_level_selected.parquet')
+        available = pd.read_parquet(adm_path, columns=['hadm_id']).columns.tolist()
+        try:
+            self.adm_df = pd.read_parquet(adm_path, columns=outcome_cols)
+        except Exception:                                   # column set varies by build
+            self.adm_df = pd.read_parquet(adm_path)
+        self._adm_index = self.adm_df.set_index(
+            self.adm_df['hadm_id'].astype('int64'))
+
+        self._embed_cols = sorted(
+            (c for c in self.sim_df.columns if c.startswith(self.EMBED_PREFIX)),
+            key=lambda c: int(c.split('_')[1]))
+        self._nn = None
+        self._nn_hadm = None
+        self._nn_subject = None
+
+    def _build_twin_index(self):
+        """Fit the nearest-neighbour index over the Phase 7 embedding space."""
+        from sklearn.neighbors import NearestNeighbors
+
+        frame = self.sim_df.dropna(subset=self._embed_cols)
+        if frame.empty:
+            raise ValueError(
+                "similarity.parquet has no populated dim_* columns. Run Phase 7 "
+                "(notebooks/12_patient_embeddings_kaggle.ipynb) and install its "
+                "similarity.parquet before requesting digital twins.")
+        matrix = frame[self._embed_cols].to_numpy(dtype='float32')
+        self._nn_hadm = frame['hadm_id'].astype('int64').to_numpy()
+        self._nn_subject = frame['subject_id'].astype('int64').to_numpy()
+        # Over-fetch so same-subject admissions can be dropped without a short result.
+        self._nn = NearestNeighbors(n_neighbors=64, metric='euclidean',
+                                    n_jobs=-1).fit(matrix)
+        self._nn_matrix = matrix
 
     def get_digital_twins(self, hadm_id, top_k=5):
-        """Fetches top-k retrieved historical digital twins for HADM ID."""
-        row = self.sim_df[self.sim_df['hadm_id'] == float(hadm_id)]
-        if len(row) == 0:
+        """
+        Retrieve the ``top_k`` nearest historical admissions in embedding space.
+
+        Previously this returned ``sim_df[sim_df.subject_id != sub_id].head(top_k)``
+        — the first rows of the file in storage order, identical for every query and
+        entirely independent of the patient. The 32-dimensional Phase 7 embedding was
+        loaded and never used, so "digital twin retrieval" returned the same five
+        admissions to everyone.
+
+        Twins are now true nearest neighbours by Euclidean distance in that space,
+        excluding every admission belonging to the query patient (not just the query
+        admission — a patient's own prior stays are not independent evidence).
+        """
+        if self._embed_cols and self._nn is None:
+            self._build_twin_index()
+        if not self._embed_cols:
+            raise ValueError(
+                "similarity.parquet contains no dim_* embedding columns; "
+                "digital twin retrieval is unavailable until Phase 7 has been run.")
+
+        hadm_id = int(hadm_id)
+        pos = np.flatnonzero(self._nn_hadm == hadm_id)
+        if len(pos) == 0:
             return []
-        sub_id = row.iloc[0]['subject_id']
-        twin_rows = self.sim_df[(self.sim_df['subject_id'] != sub_id)].head(top_k)
-        
+        q_idx = int(pos[0])
+        q_subject = self._nn_subject[q_idx]
+
+        n_probe = min(len(self._nn_hadm), max(64, top_k * 12))
+        dists, inds = self._nn.kneighbors(
+            self._nn_matrix[q_idx].reshape(1, -1), n_neighbors=n_probe)
+
         twins = []
-        for _, t_row in twin_rows.iterrows():
-            t_hadm = t_row['hadm_id']
-            a_sub = self.adm_df[self.adm_df['hadm_id'] == t_hadm]
-            if len(a_sub) > 0:
-                a_info = a_sub.iloc[0]
-                twins.append({
-                    'hadm_id': t_hadm,
-                    'hospital_expire_flag': int(a_info.get('hospital_expire_flag', 0)),
-                    'has_icu_stay': int(a_info.get('has_icu_stay', 0)),
-                    'readmission_30d': int(a_info.get('readmission_30d', 0)),
-                    'los_days': float(a_info.get('los_days', 1.0))
-                })
+        for dist, idx in zip(dists[0], inds[0]):
+            if self._nn_subject[idx] == q_subject:        # self and same-patient stays
+                continue
+            t_hadm = int(self._nn_hadm[idx])
+            if t_hadm not in self._adm_index.index:
+                continue
+            info = self._adm_index.loc[t_hadm]
+            if isinstance(info, pd.DataFrame):
+                info = info.iloc[0]
+            twins.append({
+                'hadm_id': t_hadm,
+                'distance': float(dist),
+                'hospital_expire_flag': int(info.get('hospital_expire_flag', 0) or 0),
+                'has_icu_stay': int(info.get('has_icu_stay', 0) or 0),
+                'readmission_30d': int(info.get('readmission_30d', 0) or 0),
+                'los_days': float(info.get('los_days', 1.0) or 1.0),
+            })
+            if len(twins) == top_k:
+                break
         return twins
 
     def build_structured_prompt(self, hadm_id):

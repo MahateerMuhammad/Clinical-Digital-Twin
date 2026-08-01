@@ -20,6 +20,22 @@
 
 ---
 
+> [!WARNING]
+> **The enrichment metric below cannot detect a working embedding.** It reports the
+> *unconditional* mean neighbour outcome over a representative query sample, divided by
+> the base rate. That quantity tends to 1.0 whatever the embedding does: neighbours of
+> high-risk patients are high-risk, neighbours of low-risk patients are low-risk, and
+> averaging over a representative sample recovers the base rate.
+>
+> Scored conditionally instead — can the neighbours' outcomes rank *this* patient's
+> outcome? — the same 32-dimensional hybrid space achieves **AUROC 0.7428** for
+> mortality and **0.8392** for ICU stay, with **4.42x** enrichment in the top decile.
+> See [`twin_retrieval_evaluation.md`](twin_retrieval_evaluation.md).
+>
+> The *comparative* conclusion below still stands: on this metric, learned spaces did not
+> clearly separate from raw scaled features. But "no useful signal" does not follow from
+> it, and should not be cited.
+
 ## 3. Master Methodological & Clinical Verdict
 
 1. **Statistical Rigor on Outcome Retrieval Quality**:

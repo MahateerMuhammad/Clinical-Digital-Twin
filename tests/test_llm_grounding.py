@@ -289,3 +289,26 @@ class ExplainabilityScreenTests(unittest.TestCase):
             with self.subTest(feat=feat):
                 self.assertIsNone(screen_feature(feat),
                                   f"{feat} is legitimate and must not be flagged")
+
+
+class CitationNumberTests(unittest.TestCase):
+    """Numbers inside URLs and DOIs are bibliographic, not clinical claims."""
+
+    def _checked(self, text):
+        from src.llm.grounding import _NUMBER_RE, _URL_RE, _CITATION_RE
+        spans = [(m.start(), m.end()) for m in _CITATION_RE.finditer(text)]
+        spans += [(m.start(), m.end()) for m in _URL_RE.finditer(text)]
+        return [m.group(1) for m in _NUMBER_RE.finditer(text)
+                if not any(a <= m.start() < b for a, b in spans)]
+
+    def test_doi_and_url_digits_are_not_treated_as_clinical_values(self):
+        text = ("Reference https://www.ahajournals.org/doi/10.1161/CIR.0000000000001038 "
+                "and doi 10.1001/jama.2016.0287.")
+        self.assertEqual(self._checked(text), [],
+                         "DOI/URL identifiers must not be checked as clinical numbers")
+
+    def test_real_clinical_values_are_still_checked(self):
+        text = ("See https://example.org/doi/10.1161/CIR.0000000000001038 — "
+                "peak creatinine 9.9 mg/dL and lowest bicarbonate 12 mEq/L.")
+        self.assertEqual(self._checked(text), ["9.9", "12"],
+                         "clinical values outside URLs must still be verified")

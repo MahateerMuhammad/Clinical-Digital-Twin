@@ -46,6 +46,10 @@ _NUMBER_RE = re.compile(r"(?<![\w/])(\d+(?:\.\d+)?)\s*(%|mg/dL|mmol/L|mEq/L|mmHg
                         re.I)
 _CITATION_RE = re.compile(r"\[([^\[\]]{3,200})\]")
 
+#: Bare URLs and DOIs. Numbers inside them are bibliographic identifiers, never
+#: clinical values, and must be excluded from numeric grounding.
+_URL_RE = re.compile(r"(?:https?://\S+|www\.\S+|\b10\.\d{4,9}/[^\s\)\]]+)", re.I)
+
 # Phrases that assert a computation the system may not have performed.
 _CLAIM_PATTERNS = [
     (re.compile(r"\bSHAP\b", re.I), "shap_claim",
@@ -278,6 +282,14 @@ def verify_text(
     # numbers) are bibliographic, not clinical claims — exclude those spans from
     # numeric grounding.
     citation_spans = [(m.start(), m.end()) for m in _CITATION_RE.finditer(text)]
+
+    # URLs and DOIs likewise. These sit in the provenance section, *outside* citation
+    # brackets, so the bracket rule never reached them: a reference such as
+    # ``https://www.ahajournals.org/doi/10.1161/CIR.0000000000001038`` yielded "1161"
+    # and "0000000000001038" as ungrounded clinical values and the report was withheld.
+    # On real admissions that rejected 64% of otherwise valid reports — a fail-closed
+    # verifier is only useful if it closes on genuine fabrication.
+    citation_spans += [(m.start(), m.end()) for m in _URL_RE.finditer(text)]
 
     def _in_citation(pos: int) -> bool:
         return any(a <= pos < b for a, b in citation_spans)

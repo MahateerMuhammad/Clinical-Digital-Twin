@@ -103,6 +103,7 @@ class LiveRealtimeMedicalRAGEngine:
 
         self.w0_numpy = None
         self.b0_numpy = None
+        self.embedding_dim_matches = False
         ae_path = os.path.join(self.models_dir, 'patient_autoencoder_lgb.pt')
         if not TORCH_AVAILABLE:
             print("ℹ️ torch unavailable — Phase 7 latent projection and Level 5 twin "
@@ -111,9 +112,34 @@ class LiveRealtimeMedicalRAGEngine:
             try:
                 ckpt = torch.load(ae_path, map_location='cpu')
                 if isinstance(ckpt, dict) and 'encoder.0.weight' in ckpt:
-                    self.w0_numpy = ckpt['encoder.0.weight'].detach().cpu().numpy().astype(np.float32)
-                    self.b0_numpy = ckpt['encoder.0.bias'].detach().cpu().numpy().astype(np.float32)
-                    print("✅ Phase 7 PyTorch Autoencoder weights loaded cleanly into thread-safe NumPy matrices.")
+                    # Go via .tolist() rather than .numpy(). torch 2.2.2 is the last
+                    # release supporting Intel macOS and was compiled against NumPy 1.x,
+                    # so its NumPy bridge (`.numpy()`, `torch.from_numpy`) raises
+                    # "Numpy is not available" under NumPy >= 2. Tensor arithmetic and
+                    # `.tolist()` are unaffected, and these are one-off weight loads at
+                    # startup, so the conversion cost is irrelevant. Downgrading NumPy
+                    # instead would mean rebuilding the entire validated stack.
+                    self.w0_numpy = np.asarray(
+                        ckpt['encoder.0.weight'].detach().cpu().tolist(), dtype=np.float32)
+                    self.b0_numpy = np.asarray(
+                        ckpt['encoder.0.bias'].detach().cpu().tolist(), dtype=np.float32)
+                    # Only usable if the encoder's output dimensionality matches the
+                    # cohort embedding it will be compared against. It does not for the
+                    # shipped checkpoint (128 vs 32); the guard keeps the mismatch a
+                    # clear, logged refusal instead of a shape error inside retrieval,
+                    # which surfaced as "evidence retrieval failed" and silently
+                    # returned zero documents for every query.
+                    emb_dim = None
+                    if getattr(self, "sim_df", None) is not None:
+                        emb_dim = sum(1 for c in self.sim_df.columns if c.startswith("dim_"))
+                    self.embedding_dim_matches = bool(emb_dim) and self.w0_numpy.shape[0] == emb_dim
+                    if self.embedding_dim_matches:
+                        print("✅ Phase 7 autoencoder weights loaded; latent projection enabled.")
+                    else:
+                        print(f"ℹ️ Phase 7 checkpoint projects to {self.w0_numpy.shape[0]}-d but the "
+                              f"cohort embedding is {emb_dim}-d — latent projection for *unseen* "
+                              f"patients is disabled. Twin retrieval for admissions already in the "
+                              f"cohort is unaffected.")
             except Exception as e:
                 print(f"Autoencoder weight loading warning: {e}")
 
@@ -450,15 +476,35 @@ class LiveRealtimeMedicalRAGEngine:
         
         vec = np.array([creat, bun, wbc, bicarb, sodium, potassium, platelets, glucose], dtype=np.float32)
         
-        if self.w0_numpy is not None:
-            w0 = self.w0_numpy
-            b0 = self.b0_numpy
-            if w0.shape[1] >= len(vec):
-                padded_vec = np.zeros(w0.shape[1], dtype=np.float32)
-                padded_vec[:len(vec)] = vec
-                z_32 = np.dot(w0, padded_vec) + b0
-                return z_32 / (np.linalg.norm(z_32) + 1e-6)
-                
+        # The surrogate projection below is disabled, deliberately.
+        #
+        # `patient_autoencoder_lgb.pt` is the *tree-leaf* autoencoder: its first layer
+        # is Linear(350 -> 128), consuming the standardised LightGBM leaf-assignment
+        # matrix. This code fed it eight raw laboratory values zero-padded to 350 and
+        # called the 128-dim result `z_32`, then compared it against the 32-dim hybrid
+        # embeddings in similarity.parquet. That raises
+        #   shapes (546028,32) and (128,) not aligned
+        # and, had the shapes matched, would still have been noise: leaf indices are
+        # not laboratory values, and the hybrid space is a concatenation of two heads,
+        # only one of which this checkpoint represents.
+        #
+        # A correct projection for an unseen patient requires the LightGBM leaf
+        # assignment, both encoder heads, and the two fitted scalers (`scaler_leaf`,
+        # `scaler_static`). The scalers were never exported from the Kaggle notebook,
+        # so that projection cannot be reconstructed here. Refusing is the only honest
+        # option — see the EmbeddingUnavailable below.
+        #
+        # Level 5 twin retrieval remains available for admissions already *in* the
+        # cohort, where the embedding is looked up rather than inferred; see
+        # `ClinicalPromptBuilder.get_digital_twins`.
+        if self.w0_numpy is not None and self.embedding_dim_matches:
+            w0, b0 = self.w0_numpy, self.b0_numpy
+            padded_vec = np.zeros(w0.shape[1], dtype=np.float32)
+            padded_vec[:len(vec)] = vec
+            z = np.dot(w0, padded_vec) + b0
+            return z / (np.linalg.norm(z) + 1e-6)
+
+
         # No learned projection available. Previously this returned
         # np.random.RandomState(hash(labs)).randn(32) — a random vector presented as
         # a latent embedding, which downstream code then reported as a "similarity

@@ -1,6 +1,6 @@
 # RAG Retrieval Evaluation
 
-Generated: 2026-07-27T13:38:35+00:00
+Generated: 2026-07-30T16:57:09+00:00
 
 Gold sets: `tests/gold/*.json` · Harness: `src/llm/retrieval_eval.py`
 
