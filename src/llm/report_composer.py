@@ -62,6 +62,23 @@ TIER_CONTEXT = {
     for i, name in enumerate(_TIER_NAMES, start=1)
 }
 
+#: Upper probability bound of tiers 1-3; anything above the last is Tier 4. These
+#: are percentiles of a specific model's test predictions, so `recompute_risk_tiers.py`
+#: reissues them on every Phase 1 retrain and they must be read from here rather than
+#: retyped. They previously existed only as three literals inside
+#: `LiveModelRunner.run_live_inference_with_uncertainty`, which is exactly how the
+#: superseded cutoffs survived a retrain and mislabelled every served patient.
+TIER_CUTOFFS: tuple[float, float, float] = (0.0034, 0.0225, 0.0883)
+
+
+def tier_for_probability(p: float) -> str:
+    """Map a mortality probability to its Phase 9 risk tier name."""
+    for cutoff, name in zip(TIER_CUTOFFS, _TIER_NAMES):
+        if p < cutoff:
+            return name
+    return _TIER_NAMES[-1]
+
+
 TASK_LABELS = {
     "p_mortality": "In-hospital mortality",
     "p_readmission": "30-day readmission",

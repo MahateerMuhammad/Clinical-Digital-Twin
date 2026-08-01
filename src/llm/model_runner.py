@@ -33,7 +33,8 @@ class LiveModelRunner:
         }
         
         self.adm_df = pd.read_parquet(os.path.join(self.data_dir, 'admission_level_selected.parquet')) if os.path.exists(os.path.join(self.data_dir, 'admission_level_selected.parquet')) else None
-        
+        self._adm_index = None      # built lazily by get_patient_row
+
     def _load_pkl(self, fname):
         path = os.path.join(self.models_dir, fname)
         if os.path.exists(path):
@@ -74,6 +75,49 @@ class LiveModelRunner:
             flat['med_class_insulin'] = 1.0 if 'insulin' in meds else 0.0
             
         return pd.Series(flat)
+
+    def get_patient_row(self, hadm_id):
+        """
+        Return the admission-level feature row for ``hadm_id`` as a Series.
+
+        Three modules — prompt_builder, clinical_agent and clinical_assistant —
+        already called this method, but it was never implemented, so every one of
+        them raised AttributeError on first use. The lookup is indexed rather than a
+        boolean scan: adm_df is ~3 GB, and rescanning it per call made a single
+        report take minutes.
+        """
+        if self.adm_df is None:
+            raise FileNotFoundError(
+                f"admission_level_selected.parquet not found under {self.data_dir}; "
+                "patient lookup is unavailable.")
+
+        if self._adm_index is None:
+            self._adm_index = self.adm_df.set_index(
+                pd.to_numeric(self.adm_df['hadm_id'], errors='coerce').astype('Int64'))
+
+        key = int(hadm_id)
+        if key not in self._adm_index.index:
+            raise KeyError(f"hadm_id {key} is not present in admission_level_selected.parquet")
+
+        row = self._adm_index.loc[key]
+        if isinstance(row, pd.DataFrame):     # duplicate hadm_id; take the first
+            row = row.iloc[0]
+        return row
+
+    def run_live_inference(self, patient_payload):
+        """
+        Multi-task inference for a patient row or payload dict.
+
+        Alias of :meth:`run_live_inference_with_uncertainty` — there is one
+        implementation, and it always attaches the uncertainty and calibration
+        fields. The short name is what callers were written against.
+        """
+        return self.run_live_inference_with_uncertainty(patient_payload)
+
+    def simulate_what_if(self, hadm_id, modifications_dict):
+        """Counterfactual for a stored admission, by hadm_id rather than payload."""
+        return self.simulate_what_if_unseen_patient(
+            self.get_patient_row(hadm_id), modifications_dict)
 
     def _predict_prob(self, task_key, patient_features):
         """Extracts exact booster feature names and computes calibrated probability."""
@@ -116,16 +160,12 @@ class LiveModelRunner:
         p_mort = self._predict_prob('mortality', p_series)
         results['p_mortality'] = p_mort
         
-        # Risk Tiering
-        if p_mort < 0.0034:
-            results['risk_tier'] = 'Tier 1: Low Risk'
-        elif p_mort < 0.0225:
-            results['risk_tier'] = 'Tier 2: Moderate Risk'
-        elif p_mort < 0.0883:
-            results['risk_tier'] = 'Tier 3: High Risk'
-        else:
-            results['risk_tier'] = 'Tier 4: Extreme Risk'
-            
+        # Risk tiering. Cutoffs come from report_composer.TIER_CUTOFFS so a Phase 1
+        # retrain updates one place; they used to be literals here and went stale.
+        from src.llm.report_composer import tier_for_probability
+        results['risk_tier'] = tier_for_probability(p_mort)
+
+
         results['model_confidence'] = 'High'
         results['calibration_statement'] = (
             "The model estimates increased mortality risk based on learned patterns from the training population. "

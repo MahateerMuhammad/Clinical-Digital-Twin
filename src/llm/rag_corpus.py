@@ -21,16 +21,19 @@ from src.llm.terminology import (
 from src.llm.evidence_cache import RetrievalUnavailable, get_default_cache
 from src.llm.guidelines import retrieve_guidelines
 
-# torch is required only to load the Phase 7 autoencoder checkpoint. It has no
-# wheel for this platform on modern Python, so it is optional: absence disables
-# the learned projection and is reported explicitly rather than silently faked.
-try:
-    import torch
-    torch.set_num_threads(1)   # single-threaded C-extension safety
-    TORCH_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    torch = None
-    TORCH_AVAILABLE = False
+# torch is deliberately NOT imported here.
+#
+# This module previously loaded the Phase 7 checkpoint with torch to build a latent
+# projection. That projection never worked — it read only `encoder.0.weight`, whose
+# 128-d output could never match the 32-d cohort embedding, so the guard below always
+# disabled it. The import was pure cost, and on this platform it is worse than that:
+# torch 2.2.2 (the last macOS x86_64 wheel, compiled against NumPy 1.x) segfaults the
+# interpreter when a LightGBM booster is loaded into the same process, in either
+# order. Importing it here crashed every consumer of ClinicalPromptBuilder.
+#
+# Real projection now lives in src/llm/twin_projection.PatientProjector, which runs
+# the full two-head forward pass in NumPy from models/encoder_weights.npz.
+_ENCODER_WEIGHTS = "encoder_weights.npz"
 
 # Dynamically resolve project root directory
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -101,47 +104,30 @@ class LiveRealtimeMedicalRAGEngine:
         self.last_twin_status = "not_attempted"
         self.last_retrieval_errors = []
 
-        self.w0_numpy = None
-        self.b0_numpy = None
-        self.embedding_dim_matches = False
-        ae_path = os.path.join(self.models_dir, 'patient_autoencoder_lgb.pt')
-        if not TORCH_AVAILABLE:
-            print("ℹ️ torch unavailable — Phase 7 latent projection and Level 5 twin "
-                  "retrieval are disabled (no surrogate embedding will be used).")
-        elif os.path.exists(ae_path):
-            try:
-                ckpt = torch.load(ae_path, map_location='cpu')
-                if isinstance(ckpt, dict) and 'encoder.0.weight' in ckpt:
-                    # Go via .tolist() rather than .numpy(). torch 2.2.2 is the last
-                    # release supporting Intel macOS and was compiled against NumPy 1.x,
-                    # so its NumPy bridge (`.numpy()`, `torch.from_numpy`) raises
-                    # "Numpy is not available" under NumPy >= 2. Tensor arithmetic and
-                    # `.tolist()` are unaffected, and these are one-off weight loads at
-                    # startup, so the conversion cost is irrelevant. Downgrading NumPy
-                    # instead would mean rebuilding the entire validated stack.
-                    self.w0_numpy = np.asarray(
-                        ckpt['encoder.0.weight'].detach().cpu().tolist(), dtype=np.float32)
-                    self.b0_numpy = np.asarray(
-                        ckpt['encoder.0.bias'].detach().cpu().tolist(), dtype=np.float32)
-                    # Only usable if the encoder's output dimensionality matches the
-                    # cohort embedding it will be compared against. It does not for the
-                    # shipped checkpoint (128 vs 32); the guard keeps the mismatch a
-                    # clear, logged refusal instead of a shape error inside retrieval,
-                    # which surfaced as "evidence retrieval failed" and silently
-                    # returned zero documents for every query.
-                    emb_dim = None
-                    if getattr(self, "sim_df", None) is not None:
-                        emb_dim = sum(1 for c in self.sim_df.columns if c.startswith("dim_"))
-                    self.embedding_dim_matches = bool(emb_dim) and self.w0_numpy.shape[0] == emb_dim
-                    if self.embedding_dim_matches:
-                        print("✅ Phase 7 autoencoder weights loaded; latent projection enabled.")
-                    else:
-                        print(f"ℹ️ Phase 7 checkpoint projects to {self.w0_numpy.shape[0]}-d but the "
-                              f"cohort embedding is {emb_dim}-d — latent projection for *unseen* "
-                              f"patients is disabled. Twin retrieval for admissions already in the "
-                              f"cohort is unaffected.")
-            except Exception as e:
-                print(f"Autoencoder weight loading warning: {e}")
+        # Latent projection for unseen patients is delegated to PatientProjector,
+        # which needs the exported NumPy weights plus both scalers. Availability is
+        # recorded here so retrieval can degrade with a clear message rather than a
+        # shape error deep inside the search.
+        self._projector = None
+        needed = [_ENCODER_WEIGHTS, 'scaler_static.pkl', 'scaler_leaf.pkl']
+        missing = [f for f in needed
+                   if not os.path.exists(os.path.join(self.models_dir, f))]
+        self.embedding_dim_matches = not missing
+        if missing:
+            print(f"ℹ️ Phase 7 projection artifacts missing ({', '.join(missing)}) — "
+                  "latent projection for *unseen* patients is disabled. Twin retrieval "
+                  "for admissions already in the cohort is unaffected. Run "
+                  "`python export_encoder_weights.py` to produce the weights.")
+
+    @property
+    def projector(self):
+        """Lazily built PatientProjector; None when its artifacts are absent."""
+        if not self.embedding_dim_matches:
+            return None
+        if self._projector is None:
+            from src.llm.twin_projection import PatientProjector
+            self._projector = PatientProjector(models_dir=self.models_dir)
+        return self._projector
 
     def _load_citation_log(self):
         if os.path.exists(self.citation_log_file):
@@ -510,10 +496,10 @@ class LiveRealtimeMedicalRAGEngine:
         # a latent embedding, which downstream code then reported as a "similarity
         # score" against real patients. Refusing is the only honest option.
         raise EmbeddingUnavailable(
-            "Phase 7 autoencoder weights unavailable "
-            f"(torch_installed={TORCH_AVAILABLE}, "
-            f"checkpoint={os.path.join(self.models_dir, 'patient_autoencoder_lgb.pt')}). "
-            "Level 5 twin retrieval is disabled; no surrogate embedding will be produced."
+            "Phase 7 projection artifacts unavailable "
+            f"(expected {_ENCODER_WEIGHTS}, scaler_static.pkl and scaler_leaf.pkl in "
+            f"{self.models_dir}). Level 5 twin retrieval is disabled; no surrogate "
+            "embedding will be produced."
         )
 
     def find_disease_constrained_twin_notes(self, patient_payload, top_k=3):
