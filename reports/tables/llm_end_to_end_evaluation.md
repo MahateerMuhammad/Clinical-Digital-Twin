@@ -19,8 +19,8 @@
 
 ## 2. Method
 
-100 held-out test admissions (seed 13), each run through four arms —
-400 generations in 69s, LLM rephrasing
+25 held-out test admissions (seed 13), each run through four arms —
+100 generations in 44s, LLM rephrasing
 disabled.
 
 | Arm | What it tests |
@@ -32,10 +32,10 @@ disabled.
 
 ### Value provenance
 
-Of 1,400 clinical values across
-100 payloads, **565 (40.4%) were measured** — read
+Of 350 clinical values across
+25 payloads, **133 (38.0%) were measured** — read
 from that admission's own `lab_*_24h` features — and
-835 were imputed as clinically normal constants.
+217 were imputed as clinically normal constants.
 
 Imputation is concentrated in the five vital signs, which have no admission-level
 source: vitals are recorded per ICU stay and 84% of admissions never reach an ICU.
@@ -54,10 +54,10 @@ the "peak"/"lowest" field carries that one draw rather than a true extreme.
 
 | Arm | N | Statuses | Generation modes | Grounding violations |
 | :--- | ---: | :--- | :--- | ---: |
-| `complete` | 100 | {'ok': 100} | {'deterministic': 100} | 0 |
-| `ablated` | 100 | {'incomplete_input': 100} | {'deterministic': 100} | 0 |
-| `alias` | 100 | {'ok': 100} | {'deterministic': 100} | 0 |
-| `unknown` | 100 | {'incomplete_input': 100} | {'deterministic': 100} | 0 |
+| `complete` | 25 | {'ok': 25} | {'deterministic': 25} | 0 |
+| `ablated` | 25 | {'incomplete_input': 25} | {'deterministic': 25} | 0 |
+| `alias` | 25 | {'ok': 25} | {'deterministic': 25} | 0 |
+| `unknown` | 25 | {'incomplete_input': 25} | {'deterministic': 25} | 0 |
 
 ## 4. Interpretation
 

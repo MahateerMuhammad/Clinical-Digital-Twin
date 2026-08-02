@@ -31,6 +31,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 from datetime import datetime
@@ -60,7 +61,40 @@ PROMOTIONS: List[Tuple[str, str]] = [
     ("icu_los_stageA_calibrated.pkl",       "phase4_icu_los_stageA_calibrated.pkl"),
     ("icu_los_stageB_regressor_lightgbm.pkl", "phase4_icu_los_stageB_lightgbm_winning.pkl"),
     ("lightgbm_deterioration.pkl",          "phase5_deterioration_lightgbm_winning.pkl"),
+    ("calibrated_deterioration.pkl",        "phase5_deterioration_calibrated.pkl"),
 ]
+
+
+def _resolve_deterioration_winner(promotions: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """
+    Promote whichever deterioration model actually won, not a hardcoded one.
+
+    Phase 5 picks its winner at runtime by test AUPRC. This list assumed LightGBM,
+    but XGBoost has won since the 2026-08-01 retrain (AUPRC 0.3771 against 0.3739) —
+    so the promoted artifact was not the one the pipeline evaluated, calibrated or
+    reported on. `deterioration_winner.json` records the choice; if it is absent the
+    LightGBM default stands and a warning is printed rather than silently promoting
+    a possibly-wrong file.
+    """
+    record = SRC / "deterioration_winner.json"
+    if not record.exists():
+        print("  ! deterioration_winner.json absent — defaulting to LightGBM. "
+              "Re-run run_deterioration_pipeline.py to record the winner.")
+        return promotions
+
+    info = json.loads(record.read_text(encoding="utf-8"))
+    pickle_name = info.get("pickle")
+    if not pickle_name:
+        return promotions
+
+    out = []
+    for src, dst in promotions:
+        if dst == "phase5_deterioration_lightgbm_winning.pkl":
+            print(f"  deterioration winner: {info.get('winning_model')} -> {pickle_name}")
+            out.append((pickle_name, dst))
+        else:
+            out.append((src, dst))
+    return out
 
 
 def _stamp(path: Path) -> str:
@@ -83,7 +117,8 @@ def main() -> int:
     DST.mkdir(parents=True, exist_ok=True)
 
     plan, missing = [], []
-    for src_name, dst_name in PROMOTIONS:
+    promotions = _resolve_deterioration_winner(PROMOTIONS)
+    for src_name, dst_name in promotions:
         s, d = SRC / src_name, DST / dst_name
         (plan if s.exists() else missing).append((s, d))
 

@@ -14,9 +14,12 @@ class EnterpriseClinicalAgent:
     """
     Transparent Clinical Decision-Support Assistant with Strict Level 4 Evidence Grounding.
     """
-    def __init__(self, data_dir='data/processed'):
+    def __init__(self, data_dir='data/processed', models_dir='models/best_models'):
+        # models_dir was not exposed, so a caller running from a subdirectory could
+        # point data_dir at the right place while the models silently failed to load.
         self.data_dir = data_dir
-        self.runner = LiveModelRunner(data_dir=data_dir)
+        self.models_dir = models_dir
+        self.runner = LiveModelRunner(data_dir=data_dir, models_dir=models_dir)
         self.llm_engine = RealLLMEngine()
 
     def tool_run_all_models(self, patient_payload):

@@ -10,7 +10,7 @@
 
 | Model              |   AUROC |   AUPRC |   Base Rate |   Brier Score Pre-Calib |   Brier Score Post-Calib |
 |:-------------------|--------:|--------:|------------:|------------------------:|-------------------------:|
-| LogisticRegression |  0.7858 |  0.3202 |      0.0595 |                  0.1753 |                 nan      |
+| LogisticRegression |  0.7865 |  0.3229 |      0.0595 |                  0.1751 |                 nan      |
 | XGBoost            |  0.8196 |  0.3771 |      0.0595 |                  0.1679 |                   0.0454 |
 | LightGBM           |  0.8231 |  0.3739 |      0.0595 |                  0.1636 |                 nan      |
 

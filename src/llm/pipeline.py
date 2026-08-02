@@ -137,7 +137,16 @@ class ClinicalReportPipeline:
         case_id: str = "case_1",
         use_llm: bool = True,
         require_complete: bool = True,
+        predictions: Optional[Dict[str, Any]] = None,
     ) -> PipelineResult:
+        """
+        ``predictions`` lets a caller supply model output computed from a richer
+        source than the payload. A cohort admission has its full feature row, so
+        inference from it is not subject to the payload coverage floor that
+        legitimately withholds predictions for an unseen patient. Passing partial or
+        payload-derived values here would defeat that guard, so it is only for
+        callers holding the complete feature set.
+        """
         t0 = time.perf_counter()
         res = PipelineResult(status="ok")
 
@@ -152,11 +161,14 @@ class ClinicalReportPipeline:
 
         # 2. predictions
         t = time.perf_counter()
-        try:
-            res.predictions = self._predict(payload)
-        except Exception as e:
-            res.warnings.append(f"model inference failed: {e}")
-            res.predictions = {}
+        if predictions is not None:
+            res.predictions = dict(predictions)
+        else:
+            try:
+                res.predictions = self._predict(payload)
+            except Exception as e:
+                res.warnings.append(f"model inference failed: {e}")
+                res.predictions = {}
         res.timings_ms["predict"] = (time.perf_counter() - t) * 1000
 
         # 3. evidence retrieval
@@ -193,9 +205,22 @@ class ClinicalReportPipeline:
         # 5. optional LLM rephrase, gated by the verifier
         # SYSTEM_CONSTANTS are published Phase 4/5/9 figures the composer may quote;
         # they are grounded in the audit reports rather than in this patient's data.
+        #
+        # Medication relevance scores are computed by this system from the payload,
+        # exactly like a model prediction, and the composer renders them
+        # ("relevance 9.5"). They were absent from the fact store, so the verifier
+        # correctly refused any report containing a ranked medication — every DKA and
+        # GI-bleed case in the Phase 11 set was withheld for quoting a number the
+        # system itself produced. Registering them keeps the verifier fail-closed
+        # while letting it recognise the system's own arithmetic.
+        med_scores = {
+            f"medication_relevance_{m.get('ingredient', i)}": m["score"]
+            for i, m in enumerate(ranked_meds)
+            if isinstance(m, dict) and m.get("score") is not None
+        }
         fact_store = build_fact_store(
             payload=payload, predictions=res.predictions, documents=res.documents,
-            extra_numbers=SYSTEM_CONSTANTS,
+            extra_numbers={**SYSTEM_CONSTANTS, **med_scores},
         )
         res.report_markdown = deterministic_md
         res.generation_mode = "deterministic"

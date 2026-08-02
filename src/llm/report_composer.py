@@ -198,7 +198,18 @@ def compose_report(
     for key, label in TASK_LABELS.items():
         if key in predictions:
             rows.append(f"| {label} | {_fmt_pct(predictions.get(key))} |")
-    risk_body = "\n".join(rows) if len(rows) > 2 else "_No model predictions were supplied._"
+    if len(rows) > 2:
+        risk_body = "\n".join(rows)
+    elif predictions.get("withheld_reason"):
+        # "Not supplied" was wrong and materially so: the pipeline *computed* these
+        # and then withheld them because the payload populated too few of the trained
+        # features. A reader told nothing was supplied would reasonably assume the
+        # models had not been run, rather than that their output was judged
+        # unreliable for this input.
+        risk_body = (f"_Model predictions withheld: "
+                     f"{predictions['withheld_reason']}._")
+    else:
+        risk_body = "_No model predictions were supplied._"
 
     tier_line = ""
     if tier:

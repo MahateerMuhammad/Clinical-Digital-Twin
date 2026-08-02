@@ -50,6 +50,16 @@ _CITATION_RE = re.compile(r"\[([^\[\]]{3,200})\]")
 #: clinical values, and must be excluded from numeric grounding.
 _URL_RE = re.compile(r"(?:https?://\S+|www\.\S+|\b10\.\d{4,9}/[^\s\)\]]+)", re.I)
 
+#: Numerals belonging to fixed outcome labels rather than to patient values.
+#: A hyphenated interval ("30-day", "6-hour", "90-day") names the outcome window;
+#: "within N hours/days" is the same thing spelled out. Deliberately narrow — it
+#: matches an integer bound to a time unit, never a bare number.
+_LABEL_RE = re.compile(
+    r"\b\d{1,3}-(?:hour|hr|day|days|week|month|year)\b"
+    r"|\bwithin\s+\d{1,3}\s+(?:hour|hours|day|days|week|weeks|month|months)\b",
+    re.I,
+)
+
 # Phrases that assert a computation the system may not have performed.
 _CLAIM_PATTERNS = [
     (re.compile(r"\bSHAP\b", re.I), "shap_claim",
@@ -290,6 +300,17 @@ def verify_text(
     # On real admissions that rejected 64% of otherwise valid reports — a fail-closed
     # verifier is only useful if it closes on genuine fabrication.
     citation_spans += [(m.start(), m.end()) for m in _URL_RE.finditer(text)]
+
+    # Fixed label text. "30-day readmission" and "deterioration within 6 hours" name
+    # a task; their numerals define *which outcome is being reported*, not a value
+    # claimed about the patient. They are constants of the system, identical in every
+    # report, and cannot be fabricated.
+    #
+    # This was latent rather than harmless: the risk table is the only place these
+    # labels appear, and predictions had been withheld from every report by the
+    # payload coverage floor. The moment a report actually displayed its predictions,
+    # the verifier rejected it for the "30" in its own column heading.
+    citation_spans += [(m.start(), m.end()) for m in _LABEL_RE.finditer(text)]
 
     def _in_citation(pos: int) -> bool:
         return any(a <= pos < b for a, b in citation_spans)

@@ -25,11 +25,16 @@ class LiveModelRunner:
             'deterioration': self._load_pkl('phase5_deterioration_lightgbm_winning.pkl')
         }
         
+        # Deterioration had no entry here, so its raw booster output was served
+        # directly. Isotonic calibration takes its Brier score from 0.1636 to 0.0454;
+        # without it a class-weight-balanced model reports ~79% deterioration risk
+        # against a 5.95% base rate, and that figure reaches the clinical report.
         self.calibrators = {
             'mortality': self._load_pkl('phase1_mortality_calibrated.pkl'),
             'readmission': self._load_pkl('phase2_readmission_calibrated.pkl'),
             'icu_admission': self._load_pkl('phase3_icu_admission_calibrated.pkl'),
-            'hospital_los': self._load_pkl('phase4_hosp_los_stageA_calibrated.pkl')
+            'hospital_los': self._load_pkl('phase4_hosp_los_stageA_calibrated.pkl'),
+            'deterioration': self._load_pkl('phase5_deterioration_calibrated.pkl'),
         }
         
         self.adm_df = pd.read_parquet(os.path.join(self.data_dir, 'admission_level_selected.parquet')) if os.path.exists(os.path.join(self.data_dir, 'admission_level_selected.parquet')) else None
@@ -41,40 +46,111 @@ class LiveModelRunner:
             return joblib.load(path)
         return None
 
+    #: payload lab field  ->  the windowed booster columns it populates.
+    #:
+    #: Every entry here previously named a whole-admission column — `lab_creatinine_max`,
+    #: `lab_bicarbonate_min` and eight more. Run C removes that entire family as
+    #: observation-window leakage, so none of them is a booster feature: every lookup
+    #: missed, every lab entered the model as 0.0, and predictions for an unseen
+    #: patient were made on an effectively empty feature vector. The counterfactual
+    #: simulator inherited the same fault and returned a delta of exactly 0.0 for any
+    #: modification, which reads as "this intervention changes nothing" rather than
+    #: "this input was never connected".
+    #:
+    #: A payload carries one value per analyte, while the windowed build emits
+    #: first/last (and sometimes min/max/mean) per analyte. The single supplied value
+    #: is written to every value column of that analyte: for a one-point analyte it is
+    #: exact, and for the others it states that the peak/trough was observed without
+    #: claiming a trajectory the payload does not describe.
+    PAYLOAD_LAB_FEATURES = {
+        'creatinine_max':  ['lab_creatinine_first_24h'],
+        'bun_max':         ['lab_bun_first_24h'],
+        'wbc_max':         ['lab_wbc_first_24h', 'lab_wbc_last_24h'],
+        'bicarbonate_min': ['lab_bicarbonate_first_24h', 'lab_bicarbonate_last_24h'],
+        'sodium_min':      ['lab_sodium_first_24h', 'lab_sodium_last_24h',
+                            'lab_sodium_max_24h'],
+        'potassium_max':   ['lab_potassium_first_24h', 'lab_potassium_last_24h',
+                            'lab_potassium_min_24h', 'lab_potassium_max_24h',
+                            'lab_potassium_mean_24h'],
+        'platelets_min':   ['lab_platelets_first_24h'],
+        'glucose_max':     ['lab_glucose_first_24h', 'lab_glucose_last_24h',
+                            'lab_glucose_min_24h', 'lab_glucose_max_24h',
+                            'lab_glucose_mean_24h'],
+        'hematocrit_min':  ['lab_hematocrit_first_24h', 'lab_hematocrit_last_24h'],
+        'anion_gap_max':   ['lab_anion_gap_first_24h', 'lab_anion_gap_last_24h',
+                            'lab_anion_gap_min_24h', 'lab_anion_gap_max_24h'],
+        'chloride_max':    ['lab_chloride_first_24h', 'lab_chloride_last_24h'],
+    }
+
+    #: Values used when the payload omits a lab. Clinically normal, and only reachable
+    #: through an explicitly incomplete payload — the validated path refuses instead.
+    LAB_DEFAULTS = {
+        'creatinine_max': 1.0, 'bun_max': 15.0, 'wbc_max': 8.5,
+        'bicarbonate_min': 24.0, 'sodium_min': 138.0, 'potassium_max': 4.2,
+        'platelets_min': 220.0, 'glucose_max': 110.0, 'hematocrit_min': 38.0,
+        'anion_gap_max': 12.0, 'chloride_max': 102.0,
+    }
+
+    MED_KEYWORDS = {
+        'med_class_antibiotic': ('vancomycin', 'cefepime', 'antibiotic', 'meropenem',
+                                 'piperacillin', 'ceftriaxone'),
+        'med_class_anticoagulant': ('enoxaparin', 'heparin', 'anticoagulant',
+                                    'warfarin', 'apixaban'),
+        'med_class_opioid': ('morphine', 'fentanyl', 'opioid', 'hydromorphone',
+                             'oxycodone'),
+        'med_class_insulin': ('insulin',),
+    }
+
     def _convert_payload_to_series(self, payload):
-        """Converts raw unseen patient payload dict into flat Pandas Series."""
+        """Convert an unseen-patient payload into a flat Series of booster features."""
         if isinstance(payload, pd.Series):
             return payload
-            
-        flat = {}
-        if isinstance(payload, dict):
-            demos = payload.get('demographics', {})
-            labs = payload.get('presentation_labs', {})
-            vitals = payload.get('vital_signs', {})
-            meds = payload.get('active_medications', [])
-            
-            flat['anchor_age'] = float(demos.get('age', 65))
-            flat['gender_M'] = 1.0 if demos.get('gender') == 'M' else 0.0
-            
-            # 10 Presentation Labs
-            flat['lab_creatinine_max'] = float(labs.get('creatinine_max', labs.get('lab_creatinine_max', 1.0)))
-            flat['lab_bun_max'] = float(labs.get('bun_max', labs.get('lab_bun_max', 15.0)))
-            flat['lab_wbc_max'] = float(labs.get('wbc_max', labs.get('lab_wbc_max', 8.5)))
-            flat['lab_bicarbonate_min'] = float(labs.get('bicarbonate_min', labs.get('lab_bicarbonate_min', 24.0)))
-            flat['lab_sodium_min'] = float(labs.get('sodium_min', labs.get('lab_sodium_min', 138.0)))
-            flat['lab_potassium_max'] = float(labs.get('potassium_max', labs.get('lab_potassium_max', 4.2)))
-            flat['lab_platelets_min'] = float(labs.get('platelets_min', labs.get('lab_platelets_min', 220.0)))
-            flat['lab_glucose_max'] = float(labs.get('glucose_max', labs.get('lab_glucose_max', 110.0)))
-            flat['lab_hematocrit_min'] = float(labs.get('hematocrit_min', labs.get('lab_hematocrit_min', 38.0)))
-            flat['lab_anion_gap_max'] = float(labs.get('anion_gap_max', labs.get('lab_anion_gap_max', 12.0)))
-            
-            # Active Medication Regimen
-            flat['med_class_antibiotic'] = 1.0 if 'vancomycin' in meds or 'cefepime' in meds or 'antibiotic' in meds else 0.0
-            flat['med_class_anticoagulant'] = 1.0 if 'enoxaparin' in meds or 'heparin' in meds or 'anticoagulant' in meds else 0.0
-            flat['med_class_opioid'] = 1.0 if 'morphine' in meds or 'fentanyl' in meds or 'opioid' in meds else 0.0
-            flat['med_class_insulin'] = 1.0 if 'insulin' in meds else 0.0
-            
+        if not isinstance(payload, dict):
+            return pd.Series(dtype=float)
+
+        demos = payload.get('demographics', {}) or {}
+        labs = payload.get('presentation_labs', {}) or {}
+        meds = [str(m).lower() for m in (payload.get('active_medications', []) or [])]
+
+        flat = {
+            'anchor_age': float(demos.get('age', 65) or 65),
+            'gender_M': 1.0 if str(demos.get('gender', '')).upper() == 'M' else 0.0,
+        }
+
+        for field, columns in self.PAYLOAD_LAB_FEATURES.items():
+            raw = labs.get(field, labs.get(f'lab_{field}', self.LAB_DEFAULTS.get(field)))
+            if raw is None:
+                continue
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                continue
+            for col in columns:
+                flat[col] = value
+
+        joined = ' '.join(meds)
+        for col, keywords in self.MED_KEYWORDS.items():
+            flat[col] = 1.0 if any(k in joined for k in keywords) else 0.0
+
         return pd.Series(flat)
+
+    def payload_feature_coverage(self, payload, task='mortality'):
+        """
+        Fraction of the task model's features the payload actually populates.
+
+        An unseen payload cannot supply admission-derived features such as
+        `diagnosis_count`, `procedure_count` or the admission-type dummies, and those
+        dominate the mortality model's SHAP ranking. They are zero-filled, which is a
+        real limitation of payload-based inference rather than a bug — but it must be
+        visible, because a zero-filled feature is indistinguishable from a genuine
+        zero once the matrix is built.
+        """
+        model = self.lgbm_models.get(task)
+        if model is None or not hasattr(model, 'booster_'):
+            return 0.0
+        names = model.booster_.feature_name()
+        supplied = set(self._convert_payload_to_series(payload).index)
+        return sum(n in supplied for n in names) / len(names)
 
     def get_patient_row(self, hadm_id):
         """
@@ -119,24 +195,65 @@ class LiveModelRunner:
         return self.simulate_what_if_unseen_patient(
             self.get_patient_row(hadm_id), modifications_dict)
 
+    @staticmethod
+    def _feature_names(model):
+        """
+        Recover a fitted model's feature list, or None.
+
+        LightGBM exposes ``booster_.feature_name()``; XGBoost exposes
+        ``get_booster().feature_names`` and has neither of the LightGBM attributes.
+        Only the LightGBM path existed, so an XGBoost model fell through to a
+        fallback that used the *payload's* keys as the feature list — which is how
+        promoting the XGBoost deterioration winner turned every prediction into a
+        feature_names mismatch. sklearn's ``feature_names_in_`` covers the rest.
+        """
+        for getter in (
+            lambda m: list(m.booster_.feature_name()),
+            lambda m: list(m.get_booster().feature_names),
+            lambda m: list(m.feature_name_),
+            lambda m: list(m.feature_names_in_),
+        ):
+            try:
+                names = getter(model)
+                if names:
+                    return names
+            except Exception:
+                continue
+        return None
+
     def _predict_prob(self, task_key, patient_features):
         """Extracts exact booster feature names and computes calibrated probability."""
         model = self.lgbm_models.get(task_key)
         if model is None:
-            return 0.05
-            
-        if hasattr(model, 'booster_'):
-            req_cols = model.booster_.feature_name()
-        elif hasattr(model, 'feature_name_'):
-            req_cols = model.feature_name_
-        else:
-            req_cols = list(patient_features.index)
-            
+            # Previously `return 0.05`. A missing model then produced a plausible
+            # 5.00% for every task, a risk tier to match, and a counterfactual delta
+            # of 0.00 — output indistinguishable from a working system. It surfaced
+            # only when a notebook running from a subdirectory reported exactly 5.00%
+            # five times over. Failing loudly is the only safe behaviour for a model
+            # that is not loaded.
+            raise FileNotFoundError(
+                f"No model loaded for task '{task_key}'. Expected the Phase 1-5 "
+                f"pickles under '{self.models_dir}' — check the path is correct "
+                "relative to the current working directory, and that "
+                "promote_models.py has been run.")
+
+
+        req_cols = self._feature_names(model)
+        if req_cols is None:
+            # Falling back to the payload's own keys produced a frame whose columns
+            # were unrelated to the model's. LightGBM tolerates that silently;
+            # XGBoost raises a feature_names mismatch. Neither is acceptable, so a
+            # model whose feature list cannot be recovered is refused outright.
+            raise ValueError(
+                f"Cannot recover feature names from the '{task_key}' model "
+                f"({type(model).__name__}). Refusing to predict against a guessed "
+                "feature set.")
+
         feat_dict = {}
         for col in req_cols:
-            val = patient_features.get(col, 0.0)
-            feat_dict[col] = float(pd.to_numeric(val, errors='coerce') or 0.0)
-            
+            val = pd.to_numeric(patient_features.get(col, 0.0), errors='coerce')
+            feat_dict[col] = 0.0 if pd.isna(val) else float(val)
+
         X_sub = pd.DataFrame([feat_dict])[req_cols]
         raw_prob = float(model.predict_proba(X_sub)[0, 1])
         
