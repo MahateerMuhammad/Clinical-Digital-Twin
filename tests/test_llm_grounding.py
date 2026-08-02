@@ -272,7 +272,7 @@ class ExplainabilityScreenTests(unittest.TestCase):
     """The Phase 8 leakage screen must fire on removed families and not on _24h."""
 
     def test_removed_families_are_flagged(self):
-        from run_explainability_audit import screen_feature
+        from scripts.evaluation.run_explainability_audit import screen_feature
         for feat in ["med_class_opioid", "sentence_count", "medical_keyword_count",
                      "negation_count", "lab_bicarbonate_min", "lab_wbc_max",
                      "lab_creatinine_first", "lab_unique_items", "lab_total_count",
@@ -282,7 +282,7 @@ class ExplainabilityScreenTests(unittest.TestCase):
                                      f"{feat} should be flagged as a removed leak family")
 
     def test_windowed_and_benign_features_pass(self):
-        from run_explainability_audit import screen_feature
+        from scripts.evaluation.run_explainability_audit import screen_feature
         for feat in ["lab_wbc_max_24h", "lab_bicarbonate_min_24h", "lab_total_count_24h",
                      "lab_unique_items_24h", "anchor_age", "gender_M",
                      "admission_type_EW EMER.", "admission_location_PHYSICIAN REFERRAL"]:

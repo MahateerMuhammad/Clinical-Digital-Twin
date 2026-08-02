@@ -37,7 +37,7 @@ _TIER_NAMES = ("Tier 1: Low Risk", "Tier 2: Moderate Risk",
 #: ungrounded. Callers building a fact store should pass these as extra numbers.
 #: Tier rates are percentiles of a specific model's test predictions, so a Phase 1
 #: retrain invalidates them. Do not edit these by hand — run
-#: ``recompute_risk_tiers.py --patch --write-report``, which rewrites both this dict
+#: ``scripts/maintenance/recompute_risk_tiers.py --patch --write-report``, which rewrites both this dict
 #: and ``TIER_CUTOFFS`` below from the model on disk and regenerates
 #: ``reports/tables/risk_stratification.md`` from the same numbers.
 #:
@@ -67,7 +67,7 @@ TIER_CONTEXT = {
 }
 
 #: Upper probability bound of tiers 1-3; anything above the last is Tier 4. These
-#: are percentiles of a specific model's test predictions, so `recompute_risk_tiers.py`
+#: are percentiles of a specific model's test predictions, so `scripts/maintenance/recompute_risk_tiers.py`
 #: reissues them on every Phase 1 retrain and they must be read from here rather than
 #: retyped. They previously existed only as three literals inside
 #: `LiveModelRunner.run_live_inference_with_uncertainty`, which is exactly how the

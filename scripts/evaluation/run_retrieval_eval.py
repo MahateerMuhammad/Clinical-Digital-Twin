@@ -1,26 +1,43 @@
 #!/usr/bin/env python3
 """
-run_retrieval_eval.py
+scripts/evaluation/run_retrieval_eval.py
 ─────────────────────
 Evaluate RAG retrieval quality against the version-controlled gold sets and write
 a Markdown report.
 
-    python run_retrieval_eval.py
-    python run_retrieval_eval.py --json          # machine-readable to stdout
-    python run_retrieval_eval.py --fail-under 0.85
+    python scripts/evaluation/run_retrieval_eval.py
+    python scripts/evaluation/run_retrieval_eval.py --json          # machine-readable to stdout
+    python scripts/evaluation/run_retrieval_eval.py --fail-under 0.85
 
 Runs fully offline — no gold-set evaluation touches the network.
 """
 
+
 from __future__ import annotations
 
+
+# ── repo-root bootstrap ──────────────────────────────────────────────────────
+# These scripts live two levels below the project root. Python puts the *script's*
+# directory on sys.path, not the working directory, so `import src...` would fail
+# from here; and many of them address data with root-relative paths such as
+# "models/" or "reports/tables/". Both are fixed by putting the root on the path
+# and running from it, which makes execution identical from any directory.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_ROOT = _Path(__file__).resolve().parents[2]
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+_os.chdir(_ROOT)
+# ─────────────────────────────────────────────────────────────────────────────
 import argparse
 import json
 import sys
 import types
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 # Import the scientific stack before any torch stub (scipy probes torch.Tensor).

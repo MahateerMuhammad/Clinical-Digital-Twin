@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-export_encoder_weights.py
+scripts/maintenance/export_encoder_weights.py
 ─────────────────────────
 Convert the two Phase 7 autoencoder checkpoints into a NumPy archive so patient
 projection never has to import torch.
@@ -30,17 +30,34 @@ statistics. Nothing about the forward pass needs a framework.
 
 Run this in a torch-only process (it imports no LightGBM) after any Phase 7 rerun:
 
-    .venv/bin/python export_encoder_weights.py
+    .venv/bin/python scripts/maintenance/export_encoder_weights.py
 """
+
 
 from __future__ import annotations
 
+
+# ── repo-root bootstrap ──────────────────────────────────────────────────────
+# These scripts live two levels below the project root. Python puts the *script's*
+# directory on sys.path, not the working directory, so `import src...` would fail
+# from here; and many of them address data with root-relative paths such as
+# "models/" or "reports/tables/". Both are fixed by putting the root on the path
+# and running from it, which makes execution identical from any directory.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_ROOT = _Path(__file__).resolve().parents[2]
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+_os.chdir(_ROOT)
+# ─────────────────────────────────────────────────────────────────────────────
 import sys
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 MODELS = ROOT / "models"
 OUT = MODELS / "encoder_weights.npz"
 

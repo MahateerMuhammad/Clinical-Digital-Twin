@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-promote_models.py
+scripts/maintenance/promote_models.py
 ─────────────────
 Promote freshly trained model artifacts from ``models/`` into ``models/best_models/``,
 which is the directory the LLM serving layer (``src/llm/model_runner.py``) loads from.
@@ -23,13 +23,30 @@ externally on Kaggle and are NOT touched by this script.
 
 Usage
 ─────
-    python promote_models.py              # dry run: show what would change
-    python promote_models.py --apply      # perform the promotion
-    python promote_models.py --apply --no-backup
+    python scripts/maintenance/promote_models.py              # dry run: show what would change
+    python scripts/maintenance/promote_models.py --apply      # perform the promotion
+    python scripts/maintenance/promote_models.py --apply --no-backup
 """
+
 
 from __future__ import annotations
 
+
+# ── repo-root bootstrap ──────────────────────────────────────────────────────
+# These scripts live two levels below the project root. Python puts the *script's*
+# directory on sys.path, not the working directory, so `import src...` would fail
+# from here; and many of them address data with root-relative paths such as
+# "models/" or "reports/tables/". Both are fixed by putting the root on the path
+# and running from it, which makes execution identical from any directory.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_ROOT = _Path(__file__).resolve().parents[2]
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+_os.chdir(_ROOT)
+# ─────────────────────────────────────────────────────────────────────────────
 import argparse
 import json
 import shutil
@@ -38,13 +55,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "models"
 DST = ROOT / "models" / "best_models"
 
 #: (source filename in models/, destination filename in models/best_models/)
 #:
-#: Phase 1 promotes the **Run C** artifacts: run_mortality_pipeline.py calls
+#: Phase 1 promotes the **Run C** artifacts: scripts/pipelines/run_mortality_pipeline.py calls
 #: ``save_models(logreg_c, xgb_c, lgb_c, calibrator)``, so these pickles are the
 #: strict 24-hour observation-window models, which is what should be served.
 PROMOTIONS: List[Tuple[str, str]] = [
@@ -79,7 +96,7 @@ def _resolve_deterioration_winner(promotions: List[Tuple[str, str]]) -> List[Tup
     record = SRC / "deterioration_winner.json"
     if not record.exists():
         print("  ! deterioration_winner.json absent — defaulting to LightGBM. "
-              "Re-run run_deterioration_pipeline.py to record the winner.")
+              "Re-run scripts/pipelines/run_deterioration_pipeline.py to record the winner.")
         return promotions
 
     info = json.loads(record.read_text(encoding="utf-8"))
@@ -156,7 +173,7 @@ def main() -> int:
     print("\nNOTE: *.pt deep-learning artifacts (Phases 6-7, Kaggle-trained) were not touched.")
     print("NOTE: Phase 9 tier cutoffs in src/llm/model_runner.py are derived from the")
     print("      calibrated model's test-set percentiles and must be recomputed after")
-    print("      promotion — run: python recompute_risk_tiers.py")
+    print("      promotion — run: python scripts/maintenance/recompute_risk_tiers.py")
     return 0
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-make_before_after_report.py
+scripts/maintenance/make_before_after_report.py
 ───────────────────────────
 Build the paired pre/post correction comparison for the identifier fix.
 
@@ -11,17 +11,34 @@ Both sets are evaluated on the *same* held-out test patients, because
 ``patient_split.parquet`` was deliberately held fixed across the correction, so
 the deltas reflect the data repair rather than a different split.
 
-    python make_before_after_report.py
+    python scripts/maintenance/make_before_after_report.py
 """
+
 
 from __future__ import annotations
 
+
+# ── repo-root bootstrap ──────────────────────────────────────────────────────
+# These scripts live two levels below the project root. Python puts the *script's*
+# directory on sys.path, not the working directory, so `import src...` would fail
+# from here; and many of them address data with root-relative paths such as
+# "models/" or "reports/tables/". Both are fixed by putting the root on the path
+# and running from it, which makes execution identical from any directory.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_ROOT = _Path(__file__).resolve().parents[2]
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+_os.chdir(_ROOT)
+# ─────────────────────────────────────────────────────────────────────────────
 import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 BASELINE = ROOT / "reports" / "baseline_pre_id_fix"
 CURRENT = ROOT / "reports" / "tables"
 OUT = CURRENT / "model_comparison_before_after.md"

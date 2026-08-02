@@ -77,14 +77,14 @@ is exact and still halves the memory of `float64`. Non-identifier floats continu
 to be downcast, preserving the memory benefit. A magnitude guard additionally
 protects any unnamed column holding integral values above 2²⁴.
 
-**Data** (`run_id_corruption_rebuild.py`): `labevents` was re-read from source CSV
+**Data** (`scripts/dev/run_id_corruption_rebuild.py`): `labevents` was re-read from source CSV
 — `data/interim/raw_cache/` could not be used, as it was written by the same
 defective code — followed by rebuilds of laboratory features and all processed
 datasets. Three interim tables (`admissions`, `chartevents`, `radiology_detail`)
 had separately been overwritten by synthetic test fixtures and were also restored;
 see §5.
 
-**Verification** (`run_id_corruption_rebuild.py --verify`) asserts that odd
+**Verification** (`scripts/dev/run_id_corruption_rebuild.py --verify`) asserts that odd
 identifiers are present at ~50% in the repaired artifacts, and that laboratory
 coverage is within 5 percentage points between even- and odd-ID admissions.
 
@@ -107,7 +107,7 @@ in `src/llm/report_composer.py`. Both have since been updated; see §7.
 `DataCleaner.clean_table` defaulted to `save=True` and wrote to
 `data/interim/{table}_clean.parquet`. The regression tests called it with synthetic
 fixtures and did not override that default, so **every execution of
-`run_tests.py` overwrote real interim tables with a handful of synthetic rows.**
+`scripts/dev/run_tests.py` overwrote real interim tables with a handful of synthetic rows.**
 `admissions_clean.parquet` (23 MB → 7 KB), `chartevents_clean.parquet`
 (542 MB → 5 KB) and `radiology_detail_clean.parquet` were destroyed this way.
 
@@ -200,7 +200,7 @@ The superseded 0.9490 figure implied a far better trade-off than exists.
 loads) use different naming schemes, and nothing in the codebase bridged them —
 promotion was a manual copy-and-rename. After the 2026-07-29 retrain, `best_models/`
 still held 2026-07-21 artifacts, so Phase 9 and the entire LLM layer continued
-serving the pre-correction models with no error raised. `promote_models.py` now
+serving the pre-correction models with no error raised. `scripts/maintenance/promote_models.py` now
 performs the mapping explicitly and archives what it replaces.
 
 Phase 9 tier cutoffs (`0.0094 / 0.1119 / 0.2171`, hardcoded in
@@ -268,14 +268,14 @@ grounding verifier correctly refused to emit a report quoting an ungroundable nu
 ## 9. Reproducing the audit
 
 ```bash
-python run_id_corruption_rebuild.py --audit             # damage report, read-only
-python run_id_corruption_rebuild.py --verify            # acceptance test
-python run_explainability_audit.py                      # Phase 8 SHAP + leakage screen
-python recompute_risk_tiers.py --write-report --patch   # Phase 9 tiers + report
-python promote_models.py                                # dry run: models/ -> best_models/
+python scripts/dev/run_id_corruption_rebuild.py --audit             # damage report, read-only
+python scripts/dev/run_id_corruption_rebuild.py --verify            # acceptance test
+python scripts/evaluation/run_explainability_audit.py                      # Phase 8 SHAP + leakage screen
+python scripts/maintenance/recompute_risk_tiers.py --write-report --patch   # Phase 9 tiers + report
+python scripts/maintenance/promote_models.py                                # dry run: models/ -> best_models/
 ```
 
-`run_explainability_audit.py` is the standing regression test for this correction: it
+`scripts/evaluation/run_explainability_audit.py` is the standing regression test for this correction: it
 screens every model's SHAP top-15 against the removed families and fails loudly if one
 reappears. Both `reports/tables/explainability_audit.md` and
 `reports/tables/risk_stratification.md` previously had no generator and went stale

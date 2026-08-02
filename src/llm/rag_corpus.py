@@ -117,7 +117,7 @@ class LiveRealtimeMedicalRAGEngine:
             print(f"ℹ️ Phase 7 projection artifacts missing ({', '.join(missing)}) — "
                   "latent projection for *unseen* patients is disabled. Twin retrieval "
                   "for admissions already in the cohort is unaffected. Run "
-                  "`python export_encoder_weights.py` to produce the weights.")
+                  "`python scripts/maintenance/export_encoder_weights.py` to produce the weights.")
 
     @property
     def projector(self):

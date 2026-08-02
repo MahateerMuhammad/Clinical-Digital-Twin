@@ -4,7 +4,7 @@ The served risk tiers must match the published ones.
 Tier cutoffs and per-tier mortality rates are percentiles of one specific model's
 test predictions, so every Phase 1 retrain invalidates them. They have gone stale
 twice: once when the cutoffs were updated by hand and SYSTEM_CONSTANTS was not, and
-once when `recompute_risk_tiers.py --patch` silently failed because it was still
+once when `scripts/maintenance/recompute_risk_tiers.py --patch` silently failed because it was still
 searching model_runner.py for literals that had moved to report_composer.
 
 Both failures are invisible at runtime — patients get tiered against superseded
@@ -24,7 +24,7 @@ REPORT = Path("reports/tables/risk_stratification.md")
 
 pytestmark = pytest.mark.skipif(
     not REPORT.exists(),
-    reason="risk_stratification.md not generated; run recompute_risk_tiers.py --write-report",
+    reason="risk_stratification.md not generated; run scripts/maintenance/recompute_risk_tiers.py --write-report",
 )
 
 
@@ -59,7 +59,7 @@ def test_cutoffs_match_the_published_report():
     published, _ = _published()
     assert tuple(round(c, 4) for c in TIER_CUTOFFS) == published, (
         f"TIER_CUTOFFS {TIER_CUTOFFS} disagrees with risk_stratification.md "
-        f"{published}. Run: recompute_risk_tiers.py --patch --write-report")
+        f"{published}. Run: scripts/maintenance/recompute_risk_tiers.py --patch --write-report")
 
 
 def test_observed_rates_match_the_published_report():
@@ -70,7 +70,7 @@ def test_observed_rates_match_the_published_report():
                  for i in range(1, 5)]
     assert constants == published, (
         f"SYSTEM_CONSTANTS rates {constants} disagree with risk_stratification.md "
-        f"{published}. Run: recompute_risk_tiers.py --patch --write-report")
+        f"{published}. Run: scripts/maintenance/recompute_risk_tiers.py --patch --write-report")
 
 
 def test_tier_boundaries_are_ordered_and_map_correctly():

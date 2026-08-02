@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-run_id_corruption_rebuild.py
+scripts/dev/run_id_corruption_rebuild.py
 ────────────────────────────
 Targeted rebuild of the artifacts damaged by the float32 identifier corruption.
 
@@ -29,10 +29,10 @@ be restored from cache, which avoids re-reading the 42 GB chartevents file.
 
 Usage
 -----
-    python run_id_corruption_rebuild.py --audit          # what is damaged (read-only)
-    python run_id_corruption_rebuild.py --verify         # did the repair work
-    python run_id_corruption_rebuild.py --stage all      # run the repair
-    python run_id_corruption_rebuild.py --stage labs     # one stage at a time
+    python scripts/dev/run_id_corruption_rebuild.py --audit          # what is damaged (read-only)
+    python scripts/dev/run_id_corruption_rebuild.py --verify         # did the repair work
+    python scripts/dev/run_id_corruption_rebuild.py --stage all      # run the repair
+    python scripts/dev/run_id_corruption_rebuild.py --stage labs     # one stage at a time
 
 Stages are independent and resumable; each verifies its own output before moving on.
 ``patient_split.parquet`` is deliberately NOT regenerated: it is keyed on
@@ -40,8 +40,25 @@ Stages are independent and resumable; each verifies its own output before moving
 model metrics directly comparable.
 """
 
+
 from __future__ import annotations
 
+
+# ── repo-root bootstrap ──────────────────────────────────────────────────────
+# These scripts live two levels below the project root. Python puts the *script's*
+# directory on sys.path, not the working directory, so `import src...` would fail
+# from here; and many of them address data with root-relative paths such as
+# "models/" or "reports/tables/". Both are fixed by putting the root on the path
+# and running from it, which makes execution identical from any directory.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_ROOT = _Path(__file__).resolve().parents[2]
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+_os.chdir(_ROOT)
+# ─────────────────────────────────────────────────────────────────────────────
 import argparse
 import shutil
 import sys
@@ -53,7 +70,7 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from src.utils.config import CFG                     # noqa: E402
@@ -424,11 +441,11 @@ def main() -> int:
     log.info("rebuild finished in %.1f min", (time.time() - started) / 60)
     verify()
     print("\nNext: retrain Phases 1-5, then regenerate the reports.\n"
-          "  python run_mortality_pipeline.py\n"
-          "  python run_readmission_pipeline.py\n"
-          "  python run_icu_admission_pipeline.py\n"
-          "  python run_los_pipeline.py\n"
-          "  python run_deterioration_pipeline.py\n")
+          "  python scripts/pipelines/run_mortality_pipeline.py\n"
+          "  python scripts/pipelines/run_readmission_pipeline.py\n"
+          "  python scripts/pipelines/run_icu_admission_pipeline.py\n"
+          "  python scripts/pipelines/run_los_pipeline.py\n"
+          "  python scripts/pipelines/run_deterioration_pipeline.py\n")
     return 0
 
 

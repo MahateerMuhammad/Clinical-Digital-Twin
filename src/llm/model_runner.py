@@ -235,7 +235,7 @@ class LiveModelRunner:
                 f"No model loaded for task '{task_key}'. Expected the Phase 1-5 "
                 f"pickles under '{self.models_dir}' — check the path is correct "
                 "relative to the current working directory, and that "
-                "promote_models.py has been run.")
+                "scripts/maintenance/promote_models.py has been run.")
 
 
         req_cols = self._feature_names(model)

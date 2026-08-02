@@ -21,14 +21,31 @@ Clinical Digital Twin/
 ├── src/
 │   ├── data/                    # Loading, cleaning, merging, pipeline
 │   ├── features/                # Feature engineering modules
+│   ├── models/                  # Phase 1-5 model pipelines
+│   ├── llm/                     # RAG, grounding, agents, report composer
 │   ├── visualization/           # EDA and plotting
 │   └── utils/                   # Config, logging, I/O, validation
+├── scripts/                     # Command-line entry points
+│   ├── pipelines/               # Data build + Phase 1-5 training
+│   ├── evaluation/              # Phase 8/11, RAG and twin-retrieval harnesses
+│   ├── maintenance/             # Model promotion, tier recompute, exports
+│   └── dev/                     # Stress tests, smoke tests, generators
+├── models/
+│   ├── best_models/             # Promoted artifacts the LLM layer serves
+│   └── *.pkl, *.pt, *.npz       # Training output
 ├── reports/
 │   ├── figures/                 # Publication-quality plots
-│   └── tables/                  # Summary tables (Parquet)
+│   └── tables/                  # Generated result tables (Markdown)
+├── tests/                       # pytest suites
 ├── logs/                        # Pipeline logs
-├── run_pipeline.py              # CLI entry point
 └── requirements.txt
+```
+
+Every script in `scripts/` puts the repository root on `sys.path` and runs from it,
+so they behave identically whichever directory you invoke them from:
+
+```sh
+python scripts/pipelines/run_mortality_pipeline.py     # from anywhere
 ```
 
 ## Quick Start
@@ -56,20 +73,20 @@ Both `.csv` and `.csv.gz` formats are supported.
 
 ```bash
 # Fast smoke test (small tables only, ~5 min)
-python run_pipeline.py --skip-large
+python scripts/pipelines/run_pipeline.py --skip-large
 
 # Standard mode (samples large tables via chunked reading)
-python run_pipeline.py
+python scripts/pipelines/run_pipeline.py
 
 # Full mode (loads entire large tables — may take hours)
-python run_pipeline.py --full
+python scripts/pipelines/run_pipeline.py --full
 ```
 
 ### 4. Run Specific Steps
 
 ```bash
-python run_pipeline.py --steps load clean
-python run_pipeline.py --steps eda features datasets
+python scripts/pipelines/run_pipeline.py --steps load clean
+python scripts/pipelines/run_pipeline.py --steps eda features datasets
 ```
 
 ## Pipeline Steps

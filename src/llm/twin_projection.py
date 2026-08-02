@@ -95,7 +95,7 @@ class _NumpyEncoder:
     Deliberately not torch. On this platform torch 2.2.2 (built for NumPy 1.x, the
     last macOS x86_64 wheel published) segfaults when a LightGBM booster is loaded in
     the same process, in either import order — and projection needs both libraries.
-    See export_encoder_weights.py.
+    See scripts/maintenance/export_encoder_weights.py.
     """
 
     def __init__(self, npz, prefix: str):
@@ -140,7 +140,7 @@ class PatientProjector:
                 f"{p} not found. Projection needs scaler_static.pkl, scaler_leaf.pkl "
                 "and encoder_weights.npz. The scalers are exported from "
                 "notebooks/12_patient_embeddings_kaggle.ipynb (Cells 3 and 4); the "
-                "npz is produced locally by `python export_encoder_weights.py` from "
+                "npz is produced locally by `python scripts/maintenance/export_encoder_weights.py` from "
                 "the two .pt checkpoints.")
         return p
 

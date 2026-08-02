@@ -1,13 +1,30 @@
 """
-run_readmission_pipeline.py
+scripts/pipelines/run_readmission_pipeline.py
 ──────────────────────────────
 Phase 2: 30-Day Unplanned Hospital Readmission Prediction & Leakage Audit Pipeline.
 Enforces strict 24-hour observation window discipline, living cohort filtering,
 LACE clinical baseline comparison, Isotonic Calibration, and SHAP explainability.
 """
 
+
 from __future__ import annotations
 
+
+# ── repo-root bootstrap ──────────────────────────────────────────────────────
+# These scripts live two levels below the project root. Python puts the *script's*
+# directory on sys.path, not the working directory, so `import src...` would fail
+# from here; and many of them address data with root-relative paths such as
+# "models/" or "reports/tables/". Both are fixed by putting the root on the path
+# and running from it, which makes execution identical from any directory.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_ROOT = _Path(__file__).resolve().parents[2]
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+_os.chdir(_ROOT)
+# ─────────────────────────────────────────────────────────────────────────────
 import time
 from pathlib import Path
 import numpy as np
