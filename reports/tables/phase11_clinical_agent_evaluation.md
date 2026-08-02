@@ -11,7 +11,7 @@ who is not in the cohort, rather than a `hadm_id`. It runs the five models, expl
 the mortality prediction with SHAP, retrieves grounded evidence, and simulates
 counterfactuals over the supplied physiology.
 
-6 clinical phenotypes x 3 age/sex variants = 18 payloads.
+6 clinical phenotypes x 2 age/sex variants = 12 payloads.
 
 ## 2. Results
 
@@ -32,12 +32,12 @@ clinician would expect to correct — and report the mean change in predicted mo
 
 | Phenotype | Diagnosis | Predicted mortality | Tier | Δ after normalisation | Tier changed |
 | :--- | :--- | ---: | :---: | ---: | ---: |
-| Septic shock | `sepsis` | 2.74% | Tier 3 | -2.76 pp | 3/3 |
-| Stage 3 AKI | `acute kidney injury` | 0.34% | Tier 2 | -0.48 pp | 3/3 |
-| Diabetic ketoacidosis | `diabetic ketoacidosis` | 4.98% | Tier 3 | -7.16 pp | 3/3 |
-| Decompensated heart failure | `heart failure` | 0.06% | Tier 1 | -0.12 pp | 1/3 |
-| Severe pneumonia | `pneumonia` | 0.34% | Tier 2 | -0.33 pp | 2/3 |
-| Upper GI haemorrhage | `gastrointestinal bleeding` | 0.80% | Tier 2 | -0.78 pp | 3/3 |
+| Septic shock | `sepsis` | 2.74% | Tier 3 | -2.85 pp | 2/2 |
+| Stage 3 AKI | `acute kidney injury` | 0.80% | Tier 2 | -0.55 pp | 2/2 |
+| Diabetic ketoacidosis | `diabetic ketoacidosis` | 8.37% | Tier 3 | -8.31 pp | 2/2 |
+| Decompensated heart failure | `heart failure` | 0.06% | Tier 1 | -0.04 pp | 0/2 |
+| Severe pneumonia | `pneumonia` | 0.80% | Tier 2 | -0.39 pp | 1/2 |
+| Upper GI haemorrhage | `gastrointestinal bleeding` | 0.80% | Tier 2 | -0.58 pp | 2/2 |
 
 ## 4. The limitation that defines this phase
 

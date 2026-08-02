@@ -312,3 +312,35 @@ class CitationNumberTests(unittest.TestCase):
                 "peak creatinine 9.9 mg/dL and lowest bicarbonate 12 mEq/L.")
         self.assertEqual(self._checked(text), ["9.9", "12"],
                          "clinical values outside URLs must still be verified")
+
+
+def test_outcome_window_labels_are_not_ungrounded_numbers():
+    """
+    "30-day readmission" names an outcome; its 30 is not a patient value.
+
+    This was latent for as long as predictions were withheld from every report by the
+    payload coverage floor — the risk table is the only place these labels appear. As
+    soon as a report displayed its own predictions, the verifier rejected it for the
+    numeral in its column heading.
+    """
+    from src.llm.grounding import build_fact_store, verify_text
+
+    store = build_fact_store(payload={}, predictions={"p_readmission": 0.17},
+                             documents=[])
+    text = ("| Task | Calibrated probability |\n"
+            "| 30-day readmission | 17.0% |\n"
+            "| Clinical deterioration within 6 hours | 17.0% |\n")
+    result = verify_text(text, store)
+    bad = [v for v in result.violations
+           if v.kind == "ungrounded_number" and v.detail.split()[1] in ("30", "6")]
+    assert not bad, f"outcome-window labels flagged as claims: {bad}"
+
+
+def test_a_genuinely_invented_number_is_still_caught():
+    """The label exemption must not open a hole: bare numbers still fail."""
+    from src.llm.grounding import build_fact_store, verify_text
+
+    store = build_fact_store(payload={}, predictions={"p_readmission": 0.17},
+                             documents=[])
+    result = verify_text("The patient's creatinine was 7.4 mg/dL.", store)
+    assert any(v.kind == "ungrounded_number" for v in result.violations)

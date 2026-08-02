@@ -20,7 +20,7 @@
 ## 2. Method
 
 25 held-out test admissions (seed 13), each run through four arms —
-100 generations in 44s, LLM rephrasing
+100 generations in 36s, LLM rephrasing
 disabled.
 
 | Arm | What it tests |
