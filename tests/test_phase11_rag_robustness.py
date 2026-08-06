@@ -24,13 +24,20 @@ class TestPhase11RAGRobustness(unittest.TestCase):
         cls.runner = LiveModelRunner()
         cls.agent = EnterpriseClinicalAgent()
         cls.test_hadm = 22595853
+        # The engine validates a *nested* payload — demographics / presentation_labs /
+        # vital_signs — and refuses a flat one. The flat dict below was the pre-
+        # validation shape and no longer describes any supported input.
         cls.new_patient_payload = {
-            'anchor_age': 68,
-            'gender': 'M',
-            'lab_creatinine_max': 4.5,
-            'lab_bun_max': 82.0,
-            'lab_wbc_max': 21.0,
-            'active_meds': ['vancomycin', 'enoxaparin']
+            'primary_diagnosis': 'acute kidney injury',
+            'demographics': {'age': 68, 'gender': 'M'},
+            'presentation_labs': {
+                'creatinine_max': 4.5, 'bun_max': 82.0, 'wbc_max': 21.0,
+                'bicarbonate_min': 16.0, 'sodium_min': 133.0, 'potassium_max': 5.6,
+                'platelets_min': 105.0, 'hematocrit_min': 29.0, 'glucose_max': 180.0,
+            },
+            'vital_signs': {'sbp_min': 92.0, 'hr_max': 112.0, 'rr_max': 24.0,
+                            'spo2_min': 93.0, 'temp_max': 38.2},
+            'active_medications': ['vancomycin', 'enoxaparin'],
         }
 
     # Test 1: Live NIH DailyMed FDA API Fetching
@@ -50,28 +57,46 @@ class TestPhase11RAGRobustness(unittest.TestCase):
 
     # Test 3: RAG Search for NEW UNSEEN Patient Payload
     def test_03_new_patient_rag(self):
-        res = self.rag.search_rag_for_new_or_existing_patient(self.new_patient_payload, "vancomycin renal failure", top_k=3)
-        self.assertGreater(len(res), 0)
-        self.assertIn('citation', res[0])
+        # Renamed: search_unseen_patient_rag, and it returns a result envelope whose
+        # documents are under 'documents' rather than a bare list.
+        res = self.rag.search_unseen_patient_rag(
+            self.new_patient_payload, query_str="vancomycin renal failure", top_k=3)
+        self.assertEqual(res['status'], 'ok', res.get('question_for_user', ''))
+        self.assertGreater(len(res['documents']), 0)
+        self.assertIn('citation', res['documents'][0])
         print("  [TEST 3 PASSED] NEW unseen patient payload RAG search successful.")
 
     # Test 4: Similar Historical Digital Twin Case Notes Retrieval
     def test_04_digital_twin_case_notes(self):
-        twin_notes = self.rag.find_similar_twin_case_notes(self.new_patient_payload, top_k=2)
-        self.assertGreater(len(twin_notes), 0)
-        self.assertIn('Historical Digital Twin Case', twin_notes[0]['category'])
+        # Renamed to find_disease_constrained_twin_notes. Level 5 retrieval requires
+        # projecting the patient into the Phase 7 space, which a payload cannot do —
+        # it carries a fraction of the encoder's inputs. The contract is that it
+        # refuses and records why, never that it invents a twin.
+        twin_notes = self.rag.find_disease_constrained_twin_notes(
+            self.new_patient_payload, top_k=2)
+        self.assertIsInstance(twin_notes, list)
+        if not twin_notes:
+            self.assertTrue(self.rag.last_twin_status,
+                            "twin retrieval returned nothing without recording a status")
+        else:
+            self.assertIn('category', twin_notes[0])
         print("  [TEST 4 PASSED] Similar historical Digital Twin case notes retrieval verified.")
 
     # Test 5: Invalid/Missing Input Handling
     def test_05_invalid_input_handling(self):
-        res = self.rag.search_rag_for_new_or_existing_patient(None, "sepsis", top_k=2)
-        self.assertIsInstance(res, list)
+        res = self.rag.search_unseen_patient_rag(None, query_str="sepsis", top_k=2)
+        self.assertIsInstance(res, dict)
+        self.assertEqual(res['status'], 'incomplete_input',
+                         "a None payload must be refused, not processed")
         print("  [TEST 5 PASSED] Invalid/None input handled without crashing.")
 
     # Test 6: Blank Query String Handling
     def test_06_blank_query(self):
-        res = self.rag.search_rag_for_new_or_existing_patient(self.test_hadm, "", top_k=2)
-        self.assertGreater(len(res), 0)
+        # A blank query must fall back to the payload's own concepts, not fail.
+        res = self.rag.search_unseen_patient_rag(
+            self.new_patient_payload, query_str="", top_k=2)
+        self.assertEqual(res['status'], 'ok')
+        self.assertGreater(len(res['documents']), 0)
         print("  [TEST 6 PASSED] Blank query string handled safely.")
 
     # Test 7: Live Model Runner 5-Task Feature Column Alignment
@@ -106,9 +131,13 @@ class TestPhase11RAGRobustness(unittest.TestCase):
         test_hadms = [22595853, 29668384, 21095812]
         for h in test_hadms:
             rep = self.agent.execute_agentic_workflow(h)
-            self.assertIn('ADVANCED CLINICAL DIGITAL TWIN AGENT REPORT', rep)
-            self.assertIn('SHAP Risk Drivers', rep)
-            self.assertIn('RAG Retrieved Evidence', rep)
+            # The workflow now composes through the fail-closed pipeline and appends
+            # the tool output, rather than concatenating unverified markdown under a
+            # banner heading.
+            self.assertIn('Appendix — tool outputs', rep)
+            self.assertIn('Local SHAP drivers', rep)
+            self.assertIn('Phase 7 digital twins', rep)
+            self.assertRegex(rep, r'\*\*Status:\*\* (ok|ok_no_evidence|incomplete_input|refused)')
         print("  [TEST 10 PASSED] End-to-End Agentic Workflow cohort execution verified.")
 
 if __name__ == '__main__':

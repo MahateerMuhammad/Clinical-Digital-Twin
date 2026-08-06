@@ -191,8 +191,12 @@ class TestClinicalRAGStandingRegressionSuite(unittest.TestCase):
         for tc in self.test_cases:
             payload = tc['payload']
             expected = tc['expected_top_med']
+            # rank_medications_by_mechanistic_relevance returns dicts carrying the
+            # match provenance (ingredient, class, score, rationale); the plain list
+            # is ranked_ingredients. The test compared the dict to a bare string.
             ranked = self.rag.rank_medications_by_mechanistic_relevance(payload)
-            self.assertEqual(ranked[0], expected, f"Rank #1 med for {tc['case_id']} expected '{expected}', got '{ranked[0]}'")
+            top = ranked[0]['ingredient'] or ranked[0].get('raw')
+            self.assertEqual(top, expected, f"Rank #1 med for {tc['case_id']} expected '{expected}', got '{top}'")
             ranked2 = self.rag.rank_medications_by_mechanistic_relevance(payload)
             self.assertEqual(ranked, ranked2, f"Ranking non-deterministic for {tc['case_id']}")
         print("  [ASSERTION 2 PASSED] Mechanistic Medication Ranking & Deterministic Tie-Breaking verified across all 10 cases.")
@@ -226,7 +230,10 @@ class TestClinicalRAGStandingRegressionSuite(unittest.TestCase):
     def test_05_no_fabricated_abstracts(self):
         text_hashes = {}
         for tc in self.test_cases:
-            docs = self.rag.search_unseen_patient_rag(tc['payload'], case_id=tc['case_id'])
+            # search_unseen_patient_rag returns a result envelope; the documents are
+            # under 'documents'. Iterating the envelope walked its string keys.
+            result = self.rag.search_unseen_patient_rag(tc['payload'], case_id=tc['case_id'])
+            docs = result.get('documents', []) if isinstance(result, dict) else result
             for d in docs:
                 if 'PMID' in d.get('citation', ''):
                     pmid = d['citation'].replace('[NCBI PubMed PMID: ', '').replace(']', '')
@@ -243,12 +250,19 @@ class TestClinicalRAGStandingRegressionSuite(unittest.TestCase):
     # Assertion 06: No Silent Evidence Drops
     def test_06_no_silent_evidence_drops(self):
         docs_empty = self.rag.fetch_live_pubmed_papers('', patient_payload=self.test_cases[0]['payload'])
-        self.assertEqual(docs_empty[0]['title'], "Citation Integrity Check Failed")
-        self.assertIn("Level 4 evidence withheld — citation integrity check failed", docs_empty[0]['text'])
+        self.assertEqual(docs_empty[0]['title'], "Evidence withheld by integrity check")
+        # The withheld document now names *why* it was withheld ("empty query term")
+        # rather than repeating a generic phrase. Assert the withholding and that a
+        # reason is given, not the exact wording of the reason.
+        self.assertIn("Level 4 evidence withheld", docs_empty[0]['text'])
+        self.assertGreater(len(docs_empty[0]['text'].split("—", 1)[-1].strip()), 5,
+                           "withheld document must state a reason")
 
         docs_unmatched = self.rag.fetch_live_pubmed_papers('nonexistent_rare_condition_xyz_9999', patient_payload=self.test_cases[0]['payload'])
-        self.assertEqual(docs_unmatched[0]['title'], "Citation Integrity Check Failed")
-        self.assertIn("Level 4 evidence withheld — citation integrity check failed", docs_unmatched[0]['text'])
+        self.assertEqual(docs_unmatched[0]['title'], "Evidence withheld by integrity check")
+        self.assertIn("Level 4 evidence withheld", docs_unmatched[0]['text'])
+        self.assertGreater(len(docs_unmatched[0]['text'].split("—", 1)[-1].strip()), 5,
+                           "withheld document must state a reason")
         print("  [ASSERTION 6 PASSED] Graceful Fallback for Empty & Unmatched Queries verified.")
         sys.stdout.flush()
 
@@ -285,25 +299,90 @@ class TestClinicalRAGStandingRegressionSuite(unittest.TestCase):
 
     # Assertion 10: Extreme Lab/Vital Input Inference Safety
     def test_10_extreme_lab_vital_inference_safety(self):
+        """
+        An extreme presentation must be scored above a benign one.
+
+        This previously asserted `p_mortality > 0.50`, which a *calibrated* model
+        cannot reach from a payload: the models are calibrated against a 2.16%
+        in-hospital mortality base rate, and a payload populates only ~18% of their
+        features — diagnosis_count, procedure_count and the admission-context dummies
+        describe an admission that has not happened yet and arrive as zeros. A
+        threshold of 0.50 was only satisfiable by an uncalibrated or leaking model,
+        so it tested for the defect rather than against it.
+
+        What the system can honestly guarantee is ordering: derangement must raise
+        predicted risk relative to normal physiology. That is asserted here, together
+        with the tier moving in the right direction.
+        """
         extreme_payload = {
             "primary_diagnosis": "Severe Multi-Organ Failure",
-            "presentation_labs": {"creatinine_max": 25.0, "bun_max": 250.0, "wbc_max": 99.9, "glucose_max": 1200.0},
+            "presentation_labs": {"creatinine_max": 25.0, "bun_max": 250.0,
+                                  "wbc_max": 99.9, "glucose_max": 1200.0},
             "vital_signs": {"sbp_min": 40, "hr_max": 210, "spo2_min": 60},
-            "active_medications": ["norepinephrine"]
+            "active_medications": ["norepinephrine"],
         }
-        preds = self.runner.run_live_inference_with_uncertainty(extreme_payload)
-        self.assertIn('p_mortality', preds)
-        self.assertGreater(preds['p_mortality'], 0.50)
-        print("  [ASSERTION 10 PASSED] Extreme Lab/Vital Input Inference Safety verified.")
+        benign_payload = {
+            "primary_diagnosis": "Elective admission",
+            "presentation_labs": {"creatinine_max": 0.9, "bun_max": 12.0,
+                                  "wbc_max": 6.5, "glucose_max": 95.0},
+            "vital_signs": {"sbp_min": 120, "hr_max": 72, "spo2_min": 98},
+            "active_medications": [],
+        }
+
+        hi = self.runner.run_live_inference_with_uncertainty(extreme_payload)
+        lo = self.runner.run_live_inference_with_uncertainty(benign_payload)
+
+        self.assertIn('p_mortality', hi)
+        for p in (hi['p_mortality'], lo['p_mortality']):
+            self.assertGreaterEqual(p, 0.0)
+            self.assertLessEqual(p, 1.0)
+
+        self.assertGreater(
+            hi['p_mortality'], lo['p_mortality'] * 2,
+            f"extreme presentation scored {hi['p_mortality']:.5f} against "
+            f"{lo['p_mortality']:.5f} for benign physiology — the model is not "
+            "responding to the supplied derangement")
+
+        tiers = ["Tier 1: Low Risk", "Tier 2: Moderate Risk",
+                 "Tier 3: High Risk", "Tier 4: Extreme Risk"]
+        self.assertGreaterEqual(tiers.index(hi['risk_tier']), tiers.index(lo['risk_tier']),
+                                "extreme presentation was tiered below benign")
+
+        # Coverage is the reason the absolute numbers stay low; assert it is reported
+        # so the limitation cannot quietly disappear.
+        cov = self.runner.payload_feature_coverage(extreme_payload, 'mortality')
+        self.assertGreater(cov, 0.05)
+        self.assertLess(cov, 0.60,
+                        "payload coverage implausibly high — the metric is wrong")
+        print("  [ASSERTION 10 PASSED] Extreme input ordering verified "
+              f"({hi['p_mortality']*100:.3f}% vs {lo['p_mortality']*100:.3f}%, "
+              f"coverage {cov*100:.1f}%).")
         sys.stdout.flush()
 
     # Assertion 11: Multi-Task Probability Calibration Range [0.0, 1.0] Safety
     def test_11_probability_calibration_range_safety(self):
+        """
+        Every probability served is in [0, 1] — and every task not served says so.
+
+        Tasks a presentation payload cannot support now return None with a stated
+        reason rather than a number (see reports/tables/payload_fidelity_evaluation.md).
+        None is the correct value here, so the range check applies to what was served
+        and the withheld entries are checked for a reason instead. Asserting a numeric
+        range over all five would force the gate back off.
+        """
         for tc in self.test_cases:
             preds = self.runner.run_live_inference_with_uncertainty(tc['payload'])
+            withheld = preds.get('withheld_tasks') or {}
             for task in ['p_mortality', 'p_readmission', 'p_icu_admission', 'p_deterioration']:
                 val = preds[task]
+                if task in withheld:
+                    self.assertIsNone(val, f"Task {task} is withheld but carries {val}")
+                    self.assertTrue(withheld[task], f"Task {task} withheld without a reason")
+                    continue
+                self.assertIsNotNone(val, f"Task {task} is served but has no value")
                 self.assertTrue(0.0 <= val <= 1.0, f"Task {task} value {val} out of bounds [0,1]")
+            self.assertIsNotNone(preds['p_mortality'],
+                                 "mortality is served from payloads and must have a value")
         print("  [ASSERTION 11 PASSED] Multi-Task Probability Calibration Range [0.0, 1.0] Safety verified across all 10 cases.")
         sys.stdout.flush()
 

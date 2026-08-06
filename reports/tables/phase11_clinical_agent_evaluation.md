@@ -11,14 +11,15 @@ who is not in the cohort, rather than a `hadm_id`. It runs the five models, expl
 the mortality prediction with SHAP, retrieves grounded evidence, and simulates
 counterfactuals over the supplied physiology.
 
-6 clinical phenotypes x 1 age/sex variants = 6 payloads.
+6 clinical phenotypes x 3 age/sex variants = 18 payloads.
 
 ## 2. Results
 
 | Check | Result | Threshold |
 | :--- | ---: | ---: |
 | SHAP drivers faithful to the payload | **100.0%** | 100% |
-| Counterfactual connected to the model | **100.0%** | 100% |
+| Counterfactual connected to the model (raw output) | **100.0%** | 100% |
+| Change survives isotonic calibration | 94.4% | reported |
 | Counterfactual directionally sane | **100.0%** | 90% |
 | Evidence retrieved | **100.0%** | 90% |
 | Reports pass fail-closed grounding | **100.0%** | 100% |
@@ -32,12 +33,12 @@ clinician would expect to correct — and report the mean change in predicted mo
 
 | Phenotype | Diagnosis | Predicted mortality | Tier | Δ after normalisation | Tier changed |
 | :--- | :--- | ---: | :---: | ---: | ---: |
-| Septic shock | `sepsis` | 3.25% | Tier 3 | -3.13 pp | 1/1 |
-| Stage 3 AKI | `acute kidney injury` | 0.80% | Tier 2 | -0.78 pp | 1/1 |
-| Diabetic ketoacidosis | `diabetic ketoacidosis` | 8.37% | Tier 3 | -8.25 pp | 1/1 |
-| Decompensated heart failure | `heart failure` | 0.11% | Tier 2 | -0.09 pp | 1/1 |
-| Severe pneumonia | `pneumonia` | 0.27% | Tier 2 | -0.21 pp | 1/1 |
-| Upper GI haemorrhage | `gastrointestinal bleeding` | 0.80% | Tier 2 | -0.79 pp | 1/1 |
+| Septic shock | `sepsis` | 10.84% | Tier 3 | -10.59 pp | 3/3 |
+| Stage 3 AKI | `acute kidney injury` | 0.80% | Tier 2 | -0.76 pp | 0/3 |
+| Diabetic ketoacidosis | `diabetic ketoacidosis` | 18.60% | Tier 4 | -15.25 pp | 3/3 |
+| Decompensated heart failure | `heart failure` | 0.27% | Tier 2 | -0.07 pp | 0/3 |
+| Severe pneumonia | `pneumonia` | 1.20% | Tier 2 | -1.18 pp | 1/3 |
+| Upper GI haemorrhage | `gastrointestinal bleeding` | 1.20% | Tier 2 | -1.05 pp | 3/3 |
 
 ## 4. The limitation that defines this phase
 

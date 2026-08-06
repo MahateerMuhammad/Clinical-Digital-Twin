@@ -430,9 +430,21 @@ class LiveRealtimeMedicalRAGEngine:
         return ranked
 
     def ranked_ingredients(self, patient_payload):
-        """Plain ingredient list, highest mechanistic relevance first."""
-        return [r['ingredient'] for r in self.rank_medications_by_mechanistic_relevance(patient_payload)
-                if r.get('recognised')]
+        """
+        Plain medication list, highest mechanistic relevance first.
+
+        Unrecognised strings fall back to what the caller supplied rather than being
+        dropped. Both consumers render this straight into the report's active
+        medication list, so filtering on ``recognised`` silently deleted any drug the
+        terminology map did not know: a DKA patient on insulin, saline and potassium
+        chloride was reported as being on the first two. Losing potassium chloride
+        from a patient with a potassium of 6.2 is precisely the omission a clinical
+        summary must never make.
+
+        Ranking is unaffected — unrecognised entries score 0.0 and sort last.
+        """
+        return [r['ingredient'] or r.get('raw')
+                for r in self.rank_medications_by_mechanistic_relevance(patient_payload)]
 
     def retrieve_guidelines(self, query, top_k=2, concepts=None):
         """
@@ -736,8 +748,15 @@ class LiveRealtimeMedicalRAGEngine:
 
         id_list = search_data.get('esearchresult', {}).get('idlist', []) or []
         if not id_list:
+            # A search that matches nothing returned a bare [] and logged only to the
+            # audit file — no document, no entry in last_retrieval_errors. From the
+            # caller's side that is indistinguishable from "no evidence tier was
+            # attempted", which is the silent drop every other path in this method
+            # avoids. Every other outcome yields an explicit record; so does this one.
             self._log_retrieval_outcome(diag_cat, "NONE", "NO_RESULTS", term)
-            return []
+            self.last_retrieval_errors.append(
+                f"PubMed returned no records for '{term}'")
+            return [self._integrity_withheld_doc(f"no PubMed record matched '{q_clean}'")]
 
         sum_url = f"{self.ESUMMARY}?db=pubmed&id={','.join(id_list)}&retmode=json"
         try:

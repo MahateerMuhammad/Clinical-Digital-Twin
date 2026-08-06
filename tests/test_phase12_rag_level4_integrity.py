@@ -31,8 +31,13 @@ class TestPhase12RAGLevel4Integrity(unittest.TestCase):
         # When PMID direct abstract cannot be fetched or is absent, it MUST trigger withholding fallback
         papers = self.rag.fetch_live_pubmed_papers("non_existent_search_query_99999", patient_payload=self.sepsis_payload)
         self.assertGreater(len(papers), 0)
-        self.assertIn("Citation Integrity Check Failed", papers[0]["title"])
-        self.assertEqual(papers[0]["text"], "Level 4 evidence withheld — citation integrity check failed")
+        # The withheld-document title was renamed.
+        self.assertIn("withheld", papers[0]["title"].lower())
+        # The withheld document now names the specific reason rather than repeating a
+        # fixed phrase. Assert the withholding and that a reason accompanies it.
+        self.assertIn("Level 4 evidence withheld", papers[0]["text"])
+        self.assertGreater(len(papers[0]["text"].split("—", 1)[-1].strip()), 5,
+                           "withheld document must state why")
         print("  [TEST 1 PASSED] Rule 1 Direct Abstract Sourcing verified (No synthetic fallback abstracts).")
 
     # Rule 2 Test: Topical Relevance Verification against patient primary diagnosis & medications
@@ -56,12 +61,15 @@ class TestPhase12RAGLevel4Integrity(unittest.TestCase):
         pmid_2 = "TEST_PMID_90002"
         duplicate_abstract = "Observational study investigating fluid resuscitation protocols in ICU patients."
         
-        # First registration for pmid_1 should succeed
-        res1 = self.rag.verify_abstract_uniqueness(pmid_1, duplicate_abstract)
+        # Signature is verify_abstract_uniqueness(text, pmid) — the arguments were
+        # passed the other way round, so each call registered the *pmid* as the
+        # abstract text. The two calls therefore never collided and the duplication
+        # guard was never actually exercised by this test.
+        res1 = self.rag.verify_abstract_uniqueness(duplicate_abstract, pmid_1)
         self.assertTrue(res1)
-        
-        # Second registration of identical abstract for pmid_2 MUST fail and trigger fabrication warning
-        res2 = self.rag.verify_abstract_uniqueness(pmid_2, duplicate_abstract)
+
+        # The identical abstract under a different PMID must be rejected.
+        res2 = self.rag.verify_abstract_uniqueness(duplicate_abstract, pmid_2)
         self.assertFalse(res2)
         print("  [TEST 3 PASSED] Rule 3 Verbatim Abstract Duplication Detection verified.")
 

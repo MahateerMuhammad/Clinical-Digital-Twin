@@ -8,6 +8,18 @@ from src.llm.model_runner import LiveModelRunner
 from src.llm.rag_corpus import rag_engine
 from src.llm.report_composer import SYSTEM_CONSTANTS
 
+
+def _risk_line(preds, key, label, suffix=''):
+    """One risk bullet, or a statement of why there is no number for it."""
+    withheld = (preds.get('withheld_tasks') or {}).get(key)
+    if withheld:
+        return f"- **{label}:** _withheld — {withheld}._"
+    value = preds.get(key)
+    if value is None:
+        return f"- **{label}:** _not computed._"
+    return f"- **{label}:** {value * 100:.2f}%{suffix}"
+
+
 class ClinicalPromptBuilder:
     """
     Synthesizes patient presentation data, live model predictions (Phases 1-5),
@@ -339,14 +351,18 @@ class ClinicalPromptBuilder:
             '---',
             '',
             '#### 2. MULTI-TASK PREDICTIVE SUITE (PHASES 1-5 & 9)',
-            f"- **In-Hospital Mortality Risk:** {preds['p_mortality']*100:.2f}% "
-            f"({preds['risk_tier']})",
-            f"- **30-Day Hospital Readmission Risk:** {preds['p_readmission']*100:.2f}%",
-            f"- **Emergency ICU Admission Risk:** {preds['p_icu_admission']*100:.2f}%",
-            f"- **Hospital Length of Stay > {los_thr} Days Risk:** "
-            f"{preds['p_los_over_5_63d']*100:.2f}%",
-            f"- **{det_hrs:.0f}-Hour Early Deterioration Warning Score:** "
-            f"{preds['p_deterioration']*100:.2f}%",
+            # This is the stored-admission path, so the full feature row is available
+            # and every task is served. `_risk_line` still handles withholding: the
+            # same helper is reachable from a payload, and printing None as 0.00%
+            # would read as a confident negative.
+            _risk_line(preds, 'p_mortality',
+                       'In-Hospital Mortality Risk', f" ({preds['risk_tier']})"),
+            _risk_line(preds, 'p_readmission', '30-Day Hospital Readmission Risk'),
+            _risk_line(preds, 'p_icu_admission', 'Emergency ICU Admission Risk'),
+            _risk_line(preds, 'p_los_over_5_63d',
+                       f'Hospital Length of Stay > {los_thr} Days Risk'),
+            _risk_line(preds, 'p_deterioration',
+                       f'{det_hrs:.0f}-Hour Early Deterioration Warning Score'),
             '',
             '---',
             '',
@@ -377,8 +393,11 @@ class ClinicalPromptBuilder:
                 f'  - **Mean embedding distance:** '
                 f'{np.mean([t["distance"] for t in twins]):.3f}',
                 '',
+                # 0.7253 was the superseded unconditional figure; the conditional
+                # metric in reports/tables/twin_retrieval_evaluation.md gives 0.8044
+                # on the same embeddings.
                 '_Twin outcomes are observed precedent, not a prediction. Retrieval '
-                '(AUROC 0.7253 on 3,000 queries) is weaker than the tabular model._',
+                '(AUROC 0.8044 on 3,000 queries) is weaker than the tabular model._',
             ]
         else:
             parts.append(f'_Unavailable: {twin_error or "this admission could not be embedded"}. '

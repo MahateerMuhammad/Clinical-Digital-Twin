@@ -7,6 +7,75 @@ import numpy as np
 
 sys.path.insert(0, os.path.abspath('.'))
 
+from src.llm.feature_space import (
+    align_to_model, encode_admission_frame, feature_coverage,
+    looks_like_admission_row,
+)
+
+#: Measured payload fidelity per task, from `scripts/evaluation/run_payload_fidelity_eval.py`
+#: on the held-out test split. `reference` is AUROC with the full admission feature
+#: row — it reproduces each phase's published figure, which is what validates the
+#: harness. `payload` is AUROC when only the fields an unseen-patient payload can
+#: carry are supplied and the rest are NaN.
+#:
+#: Regenerate with `--patch` after any Phase 1-5 retrain; `tests/test_payload_fidelity.py`
+#: fails if these drift from reports/tables/payload_fidelity_evaluation.md.
+PAYLOAD_FIDELITY = {
+    'mortality':     {'reference': 0.9448, 'payload': 0.8470},
+    'readmission':   {'reference': 0.7062, 'payload': 0.5673},
+    'icu_admission': {'reference': 0.9209, 'payload': 0.6012},
+    'hospital_los':  {'reference': 0.8997, 'payload': 0.4894},
+    'deterioration': {'reference': 0.8144, 'payload': 0.6865},
+}
+
+#: A payload-derived prediction is served only if it keeps at least this fraction of
+#: the validated model's discriminative lift, (AUROC − 0.5) / (AUROC_ref − 0.5).
+#:
+#: Retention rather than absolute AUROC, because the report quotes each model under
+#: its *published* performance: an ICU-admission figure presented as coming from a
+#: 0.92-AUROC model, computed from an input on which that model scores 0.60, is a
+#: misrepresentation whatever the absolute number.
+#:
+#: Both decisions at this boundary are stable rather than coin flips — bootstrapped
+#: over the test split, the served task's retention CI is [0.716, 0.835] and the
+#: nearest withheld one's is [0.523, 0.662], neither crossing the floor. An absolute
+#: AUROC threshold near 0.70 would have been the unstable choice: deterioration's
+#: absolute CI straddles it.
+PAYLOAD_RETENTION_FLOOR = 2.0 / 3.0
+
+
+def payload_retention(task):
+    """Fraction of the validated model's AUROC lift a payload preserves."""
+    f = PAYLOAD_FIDELITY.get(task)
+    if not f or f['reference'] <= 0.5:
+        return 0.0
+    return (f['payload'] - 0.5) / (f['reference'] - 0.5)
+
+
+#: Derived, never written by hand, so the floor and the table cannot disagree.
+PAYLOAD_SERVED_TASKS = frozenset(
+    t for t in PAYLOAD_FIDELITY if payload_retention(t) >= PAYLOAD_RETENTION_FLOOR)
+
+
+def payload_withheld_reason(task):
+    """Why ``task`` is not served from a payload, or None if it is."""
+    if task in PAYLOAD_SERVED_TASKS:
+        return None
+    f = PAYLOAD_FIDELITY[task]
+    head = (f"a presentation payload supports AUROC {f['payload']:.3f} for this task "
+            f"against {f['reference']:.3f} from the full admission record")
+    retention = payload_retention(task)
+    if retention <= 0:
+        # Below 0.5 the model ranks patients backwards, and "-3% of the validated
+        # discrimination" describes that badly — a reader takes it for a small
+        # shortfall. It also breaks fail-closed verification, which reads the digits
+        # of "-3%" as the number 3 and cannot match the negative constant.
+        return (f"{head} — below chance, so the model ranks patients in the wrong "
+                f"direction on this input")
+    return (f"{head} — {retention:.0%} of the validated discrimination, below the "
+            f"{PAYLOAD_RETENTION_FLOOR:.0%} floor")
+
+
 class LiveModelRunner:
     """
     Triggers live model inference on Phase 1-5 LightGBM pickles and runs
@@ -101,9 +170,34 @@ class LiveModelRunner:
         'med_class_insulin': ('insulin',),
     }
 
+    def _encode_row(self, row):
+        """
+        One-hot expand a stored admission row into the boosters' namespace.
+
+        ``Series.to_frame().T`` casts every column to object, which would make
+        ``encode_admission_frame`` treat the numeric features as categoricals and
+        one-hot expand all 275 of them. The original dtypes are restored from
+        ``adm_df`` first, and ``infer_objects`` covers anything not found there.
+        """
+        frame = row.to_frame().T
+        if self.adm_df is not None:
+            for c in frame.columns:
+                if c in self.adm_df.columns:
+                    try:
+                        frame[c] = frame[c].astype(self.adm_df[c].dtype)
+                    except (TypeError, ValueError):
+                        pass
+        return encode_admission_frame(frame.infer_objects())
+
     def _convert_payload_to_series(self, payload):
         """Convert an unseen-patient payload into a flat Series of booster features."""
         if isinstance(payload, pd.Series):
+            # A stored admission row still carries `admission_type = "URGENT"` rather
+            # than the `admission_type_URGENT` dummy the booster was fitted on, so
+            # without this expansion the numeric coercion downstream turned every
+            # categorical into NaN and the row path ran on 78 of 164 features.
+            if looks_like_admission_row(payload):
+                return self._encode_row(payload).iloc[0]
             return payload
         if not isinstance(payload, dict):
             return pd.Series(dtype=float)
@@ -146,11 +240,11 @@ class LiveModelRunner:
         zero once the matrix is built.
         """
         model = self.lgbm_models.get(task)
-        if model is None or not hasattr(model, 'booster_'):
+        names = None if model is None else self._feature_names(model)
+        if not names:
             return 0.0
-        names = model.booster_.feature_name()
-        supplied = set(self._convert_payload_to_series(payload).index)
-        return sum(n in supplied for n in names) / len(names)
+        supplied = self._convert_payload_to_series(payload)
+        return feature_coverage(supplied.to_frame().T, names)
 
     def get_patient_row(self, hadm_id):
         """
@@ -223,6 +317,21 @@ class LiveModelRunner:
 
     def _predict_prob(self, task_key, patient_features):
         """Extracts exact booster feature names and computes calibrated probability."""
+        return self.predict_prob(task_key, patient_features)[1]
+
+    def predict_prob(self, task_key, patient_features):
+        """
+        Return ``(raw, calibrated)`` for one task.
+
+        Both are needed to tell two different things apart. Isotonic calibration is
+        piecewise constant, so a genuine change in the model's raw output can map to a
+        bit-identical calibrated probability: a heart-failure counterfactual moves the
+        booster from 0.14995 to 0.14166 and both land on 0.795985%. Reading that zero
+        delta off the calibrated value alone says "this input is not wired to the
+        model", which is false — the input is wired, and the calibrator cannot resolve
+        the difference. The two failures need different fixes, so they are reported
+        separately; see `scripts/evaluation/run_phase11_eval.py`.
+        """
         model = self.lgbm_models.get(task_key)
         if model is None:
             # Previously `return 0.05`. A missing model then produced a plausible
@@ -249,34 +358,51 @@ class LiveModelRunner:
                 f"({type(model).__name__}). Refusing to predict against a guessed "
                 "feature set.")
 
-        feat_dict = {}
-        for col in req_cols:
-            val = pd.to_numeric(patient_features.get(col, 0.0), errors='coerce')
-            feat_dict[col] = 0.0 if pd.isna(val) else float(val)
-
-        X_sub = pd.DataFrame([feat_dict])[req_cols]
+        # Unsupplied features are NaN, not 0.0. A zero is a measurement — creatinine
+        # of zero, admission in year zero, no bloods sent — and the boosters split on
+        # it. NaN is the missing-value representation both LightGBM and XGBoost were
+        # fitted with. On the test split this alone takes payload-based mortality
+        # AUROC from 0.8180 to 0.8470; see src/llm/feature_space.py.
+        X_sub = align_to_model(patient_features.to_frame().T, req_cols)
         raw_prob = float(model.predict_proba(X_sub)[0, 1])
         
         calibrator = self.calibrators.get(task_key)
         if calibrator is not None and hasattr(calibrator, 'predict'):
             try:
                 cal_prob = float(calibrator.predict([raw_prob])[0])
-                return float(np.clip(cal_prob, 0.0001, 0.9999))
+                return raw_prob, float(np.clip(cal_prob, 0.0001, 0.9999))
             except Exception:
-                return float(np.clip(raw_prob, 0.0001, 0.9999))
-                
-        return float(np.clip(raw_prob, 0.0001, 0.9999))
+                return raw_prob, float(np.clip(raw_prob, 0.0001, 0.9999))
+
+        return raw_prob, float(np.clip(raw_prob, 0.0001, 0.9999))
+
+    #: results key ← task key
+    TASK_KEYS = {
+        'p_mortality': 'mortality',
+        'p_readmission': 'readmission',
+        'p_icu_admission': 'icu_admission',
+        'p_los_over_5_63d': 'hospital_los',
+        'p_deterioration': 'deterioration',
+    }
 
     def run_live_inference_with_uncertainty(self, patient_payload):
         """
         Executes multi-task inference and attaches explicit Prediction Uncertainty & Calibration Reliability.
+
+        Tasks a presentation payload cannot support are withheld rather than
+        reported. Every task used to be served from any input, so a payload carrying
+        eleven labs produced an ICU-admission figure whose rank correlation with the
+        same model's full-record prediction was 0.004 — a number with the form of a
+        risk estimate and none of the content. A stored admission row populates the
+        whole feature set, so nothing is withheld on that path.
         """
+        is_row = isinstance(patient_payload, pd.Series) and looks_like_admission_row(patient_payload)
         p_series = self._convert_payload_to_series(patient_payload)
         results = {}
-        
-        p_mort = self._predict_prob('mortality', p_series)
+
+        raw_mort, p_mort = self.predict_prob('mortality', p_series)
         results['p_mortality'] = p_mort
-        
+
         # Risk tiering. Cutoffs come from report_composer.TIER_CUTOFFS so a Phase 1
         # retrain updates one place; they used to be literals here and went stale.
         from src.llm.report_composer import tier_for_probability
@@ -288,12 +414,26 @@ class LiveModelRunner:
             "The model estimates increased mortality risk based on learned patterns from the training population. "
             "This is a probabilistic estimate and not a deterministic outcome. Confidence estimated from model calibration performance."
         )
-        
-        results['p_readmission'] = self._predict_prob('readmission', p_series)
-        results['p_icu_admission'] = self._predict_prob('icu_admission', p_series)
-        results['p_los_over_5_63d'] = self._predict_prob('hospital_los', p_series)
-        results['p_deterioration'] = self._predict_prob('deterioration', p_series)
-        
+
+        withheld = {}
+        # Pre-calibration outputs, kept alongside. They are never quoted to a
+        # clinician — an uncalibrated booster reports ~79% deterioration against a
+        # 5.95% base rate — but they are the only way to distinguish "the input did
+        # not reach the model" from "the isotonic step could not resolve the change".
+        raw = {'p_mortality': raw_mort}
+        for key, task in self.TASK_KEYS.items():
+            if key == 'p_mortality':
+                continue
+            reason = None if is_row else payload_withheld_reason(task)
+            if reason:
+                results[key] = None
+                withheld[key] = reason
+            else:
+                raw[key], results[key] = self.predict_prob(task, p_series)
+
+        results['withheld_tasks'] = withheld
+        results['raw_probabilities'] = raw
+        results['input_kind'] = 'admission_row' if is_row else 'presentation_payload'
         return results
 
     def simulate_what_if_unseen_patient(self, base_payload, modifications_dict):
@@ -321,13 +461,24 @@ class LiveModelRunner:
                 
         mod_preds = self.run_live_inference_with_uncertainty(mod_payload)
         
-        deltas = {
-            'delta_p_mortality': mod_preds['p_mortality'] - base_preds['p_mortality'],
-            'delta_p_icu_admission': mod_preds['p_icu_admission'] - base_preds['p_icu_admission'],
-            'delta_p_deterioration': mod_preds['p_deterioration'] - base_preds['p_deterioration'],
-            'base_tier': base_preds['risk_tier'],
-            'mod_tier': mod_preds['risk_tier']
-        }
+        # A withheld task has no probability, so it has no delta either. Subtracting
+        # None raises; substituting 0.0 would report "this intervention changes
+        # nothing", which is the reading the whole withholding mechanism exists to
+        # prevent. The key is simply absent, and the reason travels with it.
+        deltas = {'base_tier': base_preds['risk_tier'], 'mod_tier': mod_preds['risk_tier']}
+        base_raw = base_preds.get('raw_probabilities') or {}
+        mod_raw = mod_preds.get('raw_probabilities') or {}
+        for key in ('p_mortality', 'p_icu_admission', 'p_deterioration'):
+            base, mod = base_preds.get(key), mod_preds.get(key)
+            if base is not None and mod is not None:
+                deltas[f'delta_{key}'] = mod - base
+            if key in base_raw and key in mod_raw:
+                # The raw delta answers "did this input reach the model?". The
+                # calibrated one answers "can the served number show it?". They differ
+                # wherever the isotonic fit is flat, and conflating them reads a
+                # resolution limit as a broken wire.
+                deltas[f'delta_raw_{key}'] = mod_raw[key] - base_raw[key]
+        deltas['withheld_tasks'] = dict(base_preds.get('withheld_tasks') or {})
         
         limitation = (
             "This analysis changes selected input variables and observes model output changes. "

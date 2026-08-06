@@ -130,9 +130,32 @@ def test_different_payloads_give_different_predictions(agent, payload):
 def test_counterfactual_is_connected(agent, payload):
     """A modification must change the prediction; 0.0 meant disconnection."""
     d = agent.tool_simulate_counterfactual(payload, dict(NORMALISED))["deltas"]
-    moved = [k for k in ("delta_p_mortality", "delta_p_icu_admission",
-                         "delta_p_deterioration") if abs(d[k]) > 1e-9]
+    deltas = {k: v for k, v in d.items() if k.startswith("delta_")}
+    assert deltas, f"no task produced a delta at all: {d}"
+    moved = [k for k, v in deltas.items() if abs(v) > 1e-9]
     assert moved, f"normalising labs changed nothing: {d}"
+
+
+def test_counterfactual_omits_withheld_tasks(agent, payload):
+    """
+    A withheld task gets no delta, not a zero one.
+
+    This used to assert deltas for ICU admission and deterioration as well. Both are
+    now withheld from payload-based inference — a payload preserves 24% and 59% of
+    their validated discrimination respectively — and a withheld task has no
+    probability to difference. Emitting 0.0 instead would read as "normalising these
+    labs has no effect on ICU risk", which is a stronger and more misleading claim
+    than saying nothing.
+    """
+    from src.llm.model_runner import PAYLOAD_SERVED_TASKS
+
+    res = agent.tool_simulate_counterfactual(payload, dict(NORMALISED))
+    d = res["deltas"]
+    assert "delta_p_mortality" in d, "mortality is served and must carry a delta"
+    for key, reason in d["withheld_tasks"].items():
+        assert f"delta_{key}" not in d, f"{key} is withheld but still has a delta"
+        assert reason, f"{key} withheld without a stated reason"
+    assert "mortality" in PAYLOAD_SERVED_TASKS
 
 
 def test_counterfactual_direction_is_sane(agent, payload):

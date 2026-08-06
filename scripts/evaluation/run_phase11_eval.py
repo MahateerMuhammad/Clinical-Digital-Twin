@@ -13,16 +13,27 @@ away.
 What is checked
 ───────────────
 1. **Feature coverage.** How much of each model a payload can actually populate.
-   Everything else is zero-filled, and a zero-filled feature is indistinguishable
-   from a real zero once the matrix is built.
+   Everything else reaches the model as NaN — its native "not observed" — rather than
+   as 0.0, which the boosters would have split on as a real measurement.
+
+   Coverage is reported, not gated. Whether a task may be served at all is decided by
+   `scripts/evaluation/run_payload_fidelity_eval.py`, which measures how much of each
+   model's discrimination survives the restriction; on that evidence four of the five
+   tasks are withheld from payload-based inference and this harness sees them absent.
 2. **SHAP faithfulness.** Laboratory drivers must carry the payload's own values.
    This is the regression test for the defect that motivated the harness: every lab
    field mapped onto whole-admission column names that Run C removes, so every value
    entered the model as 0.0 and the agent explained a patient made entirely of zeros.
+   A driver the payload never supplied must say so rather than quote a number.
 3. **Counterfactual connectivity.** Normalising deranged labs must change the
    prediction. The same broken mapping made every counterfactual return a delta of
    exactly 0.0, which reads as "this intervention has no effect" rather than "this
    input was never wired up" — the more dangerous of the two readings.
+
+   Measured on the raw booster output. Isotonic calibration is piecewise constant, so
+   a genuine change can map to an identical calibrated probability; that is a
+   resolution limit of the calibrator rather than a disconnected input, and it is
+   reported separately instead of failing the phase.
 4. **Counterfactual directionality.** Normalising deranged labs must not *raise*
    predicted risk. This is an association check on a supervised model, not a causal
    claim; see the disclaimer the simulator itself emits.
@@ -147,6 +158,7 @@ def main() -> int:
     pipe = ClinicalReportPipeline()
 
     rows, coverage, shap_faithful, cf_connected, cf_directional = [], [], [], [], []
+    cf_resolved = []
     evidence_found, grounded = [], []
 
     print(f"Evaluating {len(PHENOTYPES)} phenotypes x {args.repeats} variants ...\n")
@@ -168,21 +180,45 @@ def main() -> int:
                            if d["feature"].startswith("lab_")
                            and d["feature"].endswith("_24h")]
             supplied = agent.runner._convert_payload_to_series(payload)
-            faithful = all(
-                abs(d["value"] - float(supplied.get(d["feature"], 0.0))) < 1e-6
-                and not (d["value"] == 0.0 and d["feature"] in supplied.index
-                         and supplied[d["feature"]] != 0.0)
-                for d in lab_drivers) if lab_drivers else False
+
+            def driver_is_faithful(d, supplied=supplied):
+                """
+                A driver either quotes the value the payload supplied, or reports that
+                none was supplied. It may not quote a value the payload never gave.
+
+                `value` is None for a feature the payload does not populate — those
+                reach the model as NaN now rather than as 0.0, so the old check's
+                comparison against a 0.0 default no longer describes either case.
+                """
+                name, shown = d["feature"], d["value"]
+                if name not in supplied.index:
+                    return shown is None
+                return shown is not None and abs(shown - float(supplied[name])) < 1e-6
+
+            faithful = (all(driver_is_faithful(d) for d in lab_drivers)
+                        if lab_drivers else False)
             shap_faithful.append(bool(faithful))
 
             # 3/4. Normalise the treatable derangements.
             mods = {f: NORMAL[f] for f in spec["treat"]}
             cf = agent.tool_simulate_counterfactual(payload, mods)
             d = cf["deltas"]
-            moved = any(abs(d[k]) > 1e-9 for k in
-                        ("delta_p_mortality", "delta_p_icu_admission",
-                         "delta_p_deterioration"))
+            # Only served tasks have a delta. Withheld ones are absent by design —
+            # see reports/tables/payload_fidelity_evaluation.md — and reading them as
+            # 0.0 would score a suppressed task as "connected but unmoved", which is
+            # the precise misreading the suppression exists to prevent.
+            #
+            # Connectivity is measured on the *raw* booster output. Isotonic
+            # calibration is piecewise constant, so a real change can land on a
+            # bit-identical calibrated probability: one heart-failure variant moves the
+            # booster 0.14995 → 0.14166 and both map to 0.795985%. That is a resolution
+            # limit of the calibrator, not a disconnected input, and the two need
+            # different fixes — so they are counted separately.
+            moved = any(abs(v) > 1e-9 for k, v in d.items() if k.startswith("delta_raw_"))
             cf_connected.append(moved)
+            resolved = any(abs(v) > 1e-9 for k, v in d.items()
+                           if k.startswith("delta_") and not k.startswith("delta_raw_"))
+            cf_resolved.append(resolved)
             cf_directional.append(d["delta_p_mortality"] <= 1e-9)
             deltas.append(d["delta_p_mortality"])
             tiers.append((d["base_tier"], d["mod_tier"]))
@@ -207,6 +243,7 @@ def main() -> int:
     cov_mean = float(np.mean(coverage))
     r_shap = float(np.mean(shap_faithful))
     r_conn = float(np.mean(cf_connected))
+    r_res = float(np.mean(cf_resolved))
     r_dir = float(np.mean(cf_directional))
     r_evid = float(np.mean(evidence_found))
     r_grnd = float(np.mean(grounded))
@@ -214,11 +251,15 @@ def main() -> int:
     print(f"\n{n} payloads evaluated\n")
     print(f"  mortality-model feature coverage   {cov_mean:.1%}")
     print(f"  SHAP drivers faithful to payload   {r_shap:.1%}")
-    print(f"  counterfactual connected           {r_conn:.1%}")
+    print(f"  counterfactual connected (raw)     {r_conn:.1%}")
+    print(f"  visible after calibration          {r_res:.1%}")
     print(f"  counterfactual directionally sane  {r_dir:.1%}")
     print(f"  evidence retrieved                 {r_evid:.1%}")
     print(f"  reports grounded                   {r_grnd:.1%}")
 
+    # Calibration resolution is reported, not gated. A flat isotonic segment is a
+    # property of the fitted calibrator, not a defect in the agent, and failing the
+    # phase for it would pressure the next person to remove the calibration.
     checks = [("SHAP faithfulness", r_shap, 1.0),
               ("Counterfactual connectivity", r_conn, 1.0),
               ("Counterfactual direction", r_dir, 0.90),
@@ -254,7 +295,8 @@ counterfactuals over the supplied physiology.
 | Check | Result | Threshold |
 | :--- | ---: | ---: |
 | SHAP drivers faithful to the payload | **{r_shap:.1%}** | 100% |
-| Counterfactual connected to the model | **{r_conn:.1%}** | 100% |
+| Counterfactual connected to the model (raw output) | **{r_conn:.1%}** | 100% |
+| Change survives isotonic calibration | {r_res:.1%} | reported |
 | Counterfactual directionally sane | **{r_dir:.1%}** | 90% |
 | Evidence retrieved | **{r_evid:.1%}** | 90% |
 | Reports pass fail-closed grounding | **{r_grnd:.1%}** | 100% |

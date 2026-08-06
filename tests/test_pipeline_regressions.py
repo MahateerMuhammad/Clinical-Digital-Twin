@@ -4,8 +4,9 @@ tests/test_pipeline_regressions.py
 Permanent regression test suite enforcing all 11 bug fixes against synthetic fixtures.
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
 from typing import Dict
 
 from tests.fixtures.synthetic_patients import create_synthetic_tables
@@ -15,7 +16,22 @@ from src.features.laboratory import build_lab_features_from_df
 from src.features.vitals import build_vital_features_from_df
 from src.utils.config import CFG
 
+@pytest.fixture(scope="module")
+def tables():
+    """
+    Synthetic MIMIC-style tables shared by the regression suite.
+
+    Every test in this file takes a `tables` argument, but the builder below was a
+    plain function named `get_synthetic_tables` and was never registered as a
+    fixture. pytest therefore reported "fixture 'tables' not found" and errored out
+    of 11 of the 12 tests — the suite had not run since it was written, so none of
+    the eleven bug fixes it claims to enforce were actually being enforced.
+    """
+    return create_synthetic_tables()
+
+
 def get_synthetic_tables():
+    """Direct accessor, for callers outside pytest."""
     return create_synthetic_tables()
 
 # 1. test_no_row_cap

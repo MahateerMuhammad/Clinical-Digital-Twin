@@ -24,14 +24,29 @@ from typing import Any, Dict, List, Optional
 
 from src.llm.grounding import build_fact_store, verify_text
 from src.llm.payload_validation import validate_payload
-from src.llm.report_composer import SYSTEM_CONSTANTS, compose_report
+from src.llm.report_composer import (
+    SYSTEM_CONSTANTS, _payload_fidelity_constants, compose_report,
+)
 
 __all__ = ["PipelineResult", "ClinicalReportPipeline"]
 
-#: Below this fraction of a model's trained features, a prediction is withheld.
-#: Zero-filling unsupplied features drove ICU-admission estimates to 0.89 against
-#: a 0.16 base rate, so a low-coverage prediction is worse than none.
-MIN_FEATURE_COVERAGE = 0.30
+#: Backstop floor for pathologically sparse input. **Not** the primary withholding
+#: mechanism — that is per task, in `LiveModelRunner`, from the measured retention of
+#: each model's discrimination under payload input
+#: (`reports/tables/payload_fidelity_evaluation.md`).
+#:
+#: This was 0.30 and was the primary gate, chosen against the defect where zero-filling
+#: drove ICU-admission estimates to 0.89 against a 0.16 base rate. Two things have since
+#: changed. Unsupplied features now reach the boosters as NaN rather than 0.0, which is
+#: what produced that inflation; and `validate_payload` refuses any payload missing a
+#: required field, so everything reaching here is complete and lands at ~18% coverage.
+#: A 30% floor therefore fired on every payload without exception, discarding the
+#: mortality estimate — the one output measured to retain most of its validated
+#: discrimination — alongside the four that genuinely do not.
+#:
+#: Set below what a complete payload achieves, so it catches input the retention
+#: measurement does not describe without overriding the measurement itself.
+MIN_FEATURE_COVERAGE = 0.10
 
 
 @dataclass
@@ -72,7 +87,7 @@ class ClinicalReportPipeline:
         llm_backend: Any = None,
         min_feature_coverage: float = MIN_FEATURE_COVERAGE,
     ) -> None:
-        self.model_runner = model_runner
+        self._model_runner = model_runner
         self._rag_store = rag_store
         self.llm_backend = llm_backend
         self.min_feature_coverage = min_feature_coverage
@@ -85,6 +100,24 @@ class ClinicalReportPipeline:
             self._rag_store = get_rag_store()
         return self._rag_store
 
+    @property
+    def model_runner(self):
+        """
+        The Phase 1-5 runner, loaded on first use.
+
+        `rag_store` had this lazy loader and `model_runner` did not, so a caller who
+        constructed `ClinicalReportPipeline()` with no arguments — which is every
+        caller — got `None`, `_predict` returned `{}` on its first line, and the
+        composed report printed "_No model predictions were supplied._" in place of
+        section 2. The whole prediction path below it, coverage guard included, was
+        unreachable. Nothing failed, so nothing surfaced it: a report missing its risk
+        section is still a valid report, and still passes grounding.
+        """
+        if self._model_runner is None:
+            from src.llm.model_runner import LiveModelRunner
+            self._model_runner = LiveModelRunner()
+        return self._model_runner
+
     # ── prediction with a coverage guard ─────────────────────────────────
     def _predict(self, payload: dict) -> Dict[str, Any]:
         if self.model_runner is None:
@@ -95,6 +128,16 @@ class ClinicalReportPipeline:
         if coverage is not None:
             preds["feature_coverage"] = coverage
             if coverage < self.min_feature_coverage:
+                # Backstop only. Withholding is normally decided per task by
+                # LiveModelRunner, from measured retention of each model's
+                # discrimination; this fires only for input so sparse that the
+                # measurement does not describe it. A payload that passes
+                # validate_payload carries every required field and lands at ~18%
+                # coverage, so under the old 30% floor this branch suppressed *every*
+                # task unconditionally — including mortality, which retains 78% of its
+                # AUROC lift. Coverage counts how much input is missing; it says
+                # nothing about whether what remains still discriminates, and it was
+                # never the right instrument for that question.
                 withheld = [k for k in list(preds) if k.startswith("p_")]
                 for k in withheld:
                     preds.pop(k, None)
@@ -218,9 +261,14 @@ class ClinicalReportPipeline:
             for i, m in enumerate(ranked_meds)
             if isinstance(m, dict) and m.get("score") is not None
         }
+        #
+        # The payload-fidelity AUROCs are registered for the same reason: a withheld
+        # task explains itself by naming the discrimination it lost, and those numbers
+        # are published constants rather than claims about this patient.
         fact_store = build_fact_store(
             payload=payload, predictions=res.predictions, documents=res.documents,
-            extra_numbers={**SYSTEM_CONSTANTS, **med_scores},
+            extra_numbers={**SYSTEM_CONSTANTS, **_payload_fidelity_constants(),
+                           **med_scores},
         )
         res.report_markdown = deterministic_md
         res.generation_mode = "deterministic"

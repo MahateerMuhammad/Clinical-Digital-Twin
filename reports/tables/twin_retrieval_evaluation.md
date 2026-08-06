@@ -42,13 +42,15 @@ at AUROC 0.8044, and queries whose twins fall in the top decile of twin-mortalit
 die at 10.96% against a 1.85% base rate. The embedding is informative;
 the Phase 7 metric was structurally unable to show it.
 
-This does not overturn Phase 7's *comparative* finding — that learned spaces did not
-clearly beat raw scaled features on that metric — but it does mean "no useful signal"
-was the wrong conclusion to draw from it.
+Phase 7's *comparative* finding has since been re-scored as well, and it does not
+survive either: on the conditional metric the hybrid space beats naive raw features by
++0.0734 AUROC with a paired 95% CI of +0.0496 to +0.0978. See
+[`representation_comparison.md`](representation_comparison.md), which scores all four
+Phase 7 spaces on identical queries.
 
 ## 4. Caveat
 
 Retrieval-based prediction is weaker than the trained tabular model
-(Phase 1 Run C: AUROC 0.9062, AUPRC 0.3281). Twin retrieval earns its place by
+(Phase 1 Run C: AUROC 0.9442, AUPRC 0.3800). Twin retrieval earns its place by
 supplying *interpretable precedent* — "here are 10 comparable admissions and
 what happened to them" — not by improving the risk estimate.

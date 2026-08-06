@@ -6,9 +6,39 @@ import json
 import shap
 import pandas as pd
 import numpy as np
+from src.llm.feature_space import align_to_model
 from src.llm.model_runner import LiveModelRunner
 from src.llm.rag_corpus import rag_store
 from src.llm.llm_engine import RealLLMEngine
+
+#: Secondary outcomes, in report order, with the base rate quoted alongside where one
+#: is published.
+_SECONDARY_OUTCOMES = (
+    ('p_readmission', '30-Day Hospital Readmission Risk', ' (Population Base Rate: 20.03%)'),
+    ('p_icu_admission', 'Emergency ICU Admission Risk', ''),
+    ('p_deterioration', '6-Hour Early Deterioration Warning Score', ''),
+)
+
+
+def _secondary_outcome_lines(models_out):
+    """
+    Render the secondary risk lines, naming what was withheld and why.
+
+    Withheld tasks carry None. Formatting None with `*100:.2f` raises, and defaulting
+    it to 0.0 would print a 0.00% risk — the most misleading value available, since it
+    reads as a confident negative rather than as no estimate at all.
+    """
+    withheld = models_out.get('withheld_tasks') or {}
+    lines = []
+    for key, label, suffix in _SECONDARY_OUTCOMES:
+        if key in withheld:
+            lines.append(f"- **{label}:** *withheld — {withheld[key]}.*")
+        elif models_out.get(key) is not None:
+            lines.append(f"- **{label}:** {models_out[key] * 100:.2f}%{suffix}")
+        else:
+            lines.append(f"- **{label}:** *not computed.*")
+    return "\n".join(lines)
+
 
 class EnterpriseClinicalAgent:
     """
@@ -32,13 +62,12 @@ class EnterpriseClinicalAgent:
             
         feat_cols = model.booster_.feature_name()
         p_series = self.runner._convert_payload_to_series(patient_payload)
-        
-        feat_dict = {}
-        for col in feat_cols:
-            feat_dict[col] = float(p_series.get(col, 0.0))
-            
-        X_sample = pd.DataFrame([feat_dict])[feat_cols]
-        
+
+        # Same NaN fill the prediction uses. Explaining a zero-filled vector while
+        # scoring a NaN-filled one attributes the risk to a different patient than
+        # the one the number came from.
+        X_sample = align_to_model(p_series.to_frame().T, feat_cols)
+
         explainer = shap.TreeExplainer(model)
         shap_vals = explainer.shap_values(X_sample)
         if isinstance(shap_vals, list):
@@ -50,9 +79,14 @@ class EnterpriseClinicalAgent:
         for f in series.index:
             s_val = float(shap_vals[0][feat_cols.index(f)])
             raw_val = float(X_sample.iloc[0][f])
+            # A feature the payload never supplied has no value to quote. It can still
+            # carry a large SHAP contribution — that is the model reacting to the
+            # *absence*, which is worth showing, but printing it as a number would
+            # invent an observation.
             explanations.append({
                 "feature": f,
-                "value": raw_val,
+                "value": None if np.isnan(raw_val) else raw_val,
+                "supplied": not np.isnan(raw_val),
                 "shap_impact": s_val,
                 "direction": "Associated with increased model-predicted risk" if s_val > 0 else "Associated with decreased model-predicted risk"
             })
@@ -288,9 +322,23 @@ class EnterpriseClinicalAgent:
         phys_summary = self.generate_patient_physiological_state_summary(patient_payload)
         models_out = self.tool_run_all_models(patient_payload)
         shap_out = self.tool_explain_shap(patient_payload, task='mortality', top_k=4)
-        rag_out = self.tool_rag_search(patient_payload, top_k=5, case_id=case_id)
+
+        # `search_unseen_patient_rag` returns a result *envelope* — status, validation,
+        # concepts, ranked medications and a `documents` list — not a bare list of
+        # documents as the earlier API did. Iterating the envelope walked its string
+        # keys, so `r.get('category')` raised AttributeError on the first one and every
+        # call to this method failed. Unpack the documents and keep the status, which
+        # is how a refusal is signalled.
+        rag_result = self.tool_rag_search(patient_payload, top_k=5, case_id=case_id)
+        if isinstance(rag_result, dict):
+            rag_status = rag_result.get('status', 'ok')
+            rag_out = list(rag_result.get('documents', []))
+        else:                                    # tolerate a plain list
+            rag_status, rag_out = 'ok', list(rag_result or [])
+
         conflicts = self.resolve_guideline_conflicts_dynamically(patient_payload, rag_out)
-        twin_notes = [r for r in rag_out if r.get('category') == 'Historical Digital Twin Cohort Case']
+        twin_notes = [r for r in rag_out
+                      if r.get('category') == 'Historical Digital Twin Cohort Case']
         twin_analysis = self.generate_historical_twin_analysis(patient_payload, twin_notes)
         
         demos = patient_payload.get('demographics', {}) if isinstance(patient_payload, dict) else {}
@@ -322,9 +370,7 @@ class EnterpriseClinicalAgent:
 - **Calibration Reliability:** *{models_out['calibration_statement']}*
 
 *Secondary Predicted Outcomes:*
-- **30-Day Hospital Readmission Risk:** {models_out['p_readmission']*100:.2f}% (Population Base Rate: 20.03%)
-- **Emergency ICU Admission Risk:** {models_out['p_icu_admission']*100:.2f}%
-- **6-Hour Early Deterioration Warning Score:** {models_out['p_deterioration']*100:.2f}%
+{_secondary_outcome_lines(models_out)}
 
 ---
 
@@ -334,12 +380,19 @@ class EnterpriseClinicalAgent:
 
 """
         for s in shap_out.get('top_shap_features', []):
-            report += f"- `{s['feature']}` ({s['value']}): {s['shap_impact']:+.4f} — *{s['direction']}*\n"
+            shown = "not supplied" if s.get('value') is None else f"{s['value']:g}"
+            report += f"- `{s['feature']}` ({shown}): {s['shap_impact']:+.4f} — *{s['direction']}*\n"
             
         report += "\n---\n\n## 4. Retrieved Evidence & Evidence Hierarchy Ranking\n"
+        if not rag_out:
+            report += (f"- *No evidence retrieved (retrieval status: `{rag_status}`). "
+                       "No citation is substituted.*\n")
         for r in rag_out:
             level = r.get('evidence_level', 'Level 4: Observational Clinical Studies')
-            report += f"- **[{level}]** {r['citation']} **{r['title']}** ({r['category']}): {r['text'][:140]}...\n"
+            text = str(r.get('text', ''))[:140]
+            report += (f"- **[{level}]** {r.get('citation', '')} "
+                       f"**{r.get('title', '')}** ({r.get('category', 'uncategorised')}): "
+                       f"{text}...\n")
             
         report += "\n---\n\n## 5. Clinical Safety Reasoning & Guideline Conflict Resolution\n"
         for rec in conflicts:
