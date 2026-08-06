@@ -25,7 +25,7 @@ MODELS = "models/best_models"
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(os.path.join(DATA, "admission_level_selected.parquet"))
-    or not os.path.exists(os.path.join(MODELS, "phase1_mortality_lightgbm_winning.pkl")),
+    or not os.path.exists(os.path.join(MODELS, "phase1_mortality_winning.pkl")),
     reason="processed data or Phase 1-5 models unavailable",
 )
 

@@ -53,6 +53,13 @@ SYSTEM_CONSTANTS: Dict[str, float] = {
     "phase4_hosp_los_threshold_days": 5.63,
     "phase4_icu_los_threshold_days": 4.18,
     "phase5_deterioration_window_hours": 6.0,
+    # Conditional twin-retrieval AUROC, from reports/tables/twin_retrieval_evaluation.md.
+    # Quoted to clinicians in the twin section of the structured prompt, so it lives
+    # here rather than as a literal in prompt_builder — where it sat at 0.7253, a figure
+    # from the superseded unconditional metric, and drifted again the moment the
+    # retrieval harness was re-run at a different query count.
+    "phase7_twin_retrieval_auroc": 0.7793,
+    "phase7_twin_retrieval_queries": 3000,
 }
 
 
