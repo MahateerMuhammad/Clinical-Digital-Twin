@@ -97,6 +97,50 @@ def test_model_runner_carries_no_copy_of_the_cutoffs():
             "tier_for_probability from report_composer instead")
 
 
+def test_twin_retrieval_auroc_matches_its_report():
+    """
+    The retrieval AUROC quoted in the twin section must match its own report.
+
+    It has now gone stale twice from the same cause — a literal in prompt_builder.py.
+    First at 0.7253, which came from the superseded *unconditional* metric and so was
+    never right; then again the moment the retrieval harness was re-run at a different
+    query count. It is quoted to clinicians as evidence of how far to trust twin
+    precedent, so a wrong value there is not cosmetic.
+    """
+    import re
+
+    from src.llm.report_composer import SYSTEM_CONSTANTS
+
+    report = Path("reports/tables/twin_retrieval_evaluation.md")
+    if not report.exists():
+        pytest.skip("twin_retrieval_evaluation.md not generated; run "
+                    "scripts/evaluation/run_twin_retrieval_eval.py")
+
+    text = report.read_text(encoding="utf-8")
+    m = re.search(r"\|\s*Mortality AUROC\s*\|\s*\*\*([\d.]+)\*\*", text)
+    assert m, "could not find the Mortality AUROC row in twin_retrieval_evaluation.md"
+    assert float(m.group(1)) == SYSTEM_CONSTANTS["phase7_twin_retrieval_auroc"], (
+        f"SYSTEM_CONSTANTS says {SYSTEM_CONSTANTS['phase7_twin_retrieval_auroc']}, the "
+        f"report says {m.group(1)}. Re-run scripts/evaluation/run_twin_retrieval_eval.py "
+        "and update the constant.")
+
+
+def test_prompt_builder_holds_no_literal_retrieval_auroc():
+    """The figure must be read from SYSTEM_CONSTANTS, not retyped."""
+    import inspect
+
+    from src.llm import prompt_builder
+    from src.llm.report_composer import SYSTEM_CONSTANTS
+
+    src = inspect.getsource(prompt_builder)
+    auroc = SYSTEM_CONSTANTS["phase7_twin_retrieval_auroc"]
+    # The value may appear inside a comment explaining the history, but never as the
+    # formatted literal the report would print.
+    assert f"AUROC {auroc:.4f} on" not in src, (
+        "prompt_builder.py hardcodes the retrieval AUROC again; format it from "
+        "SYSTEM_CONSTANTS so a re-run of the harness cannot leave it stale")
+
+
 def test_tier_context_prose_uses_the_current_rates():
     """The prose quoted to clinicians must not lag the constants."""
     from src.llm.report_composer import SYSTEM_CONSTANTS, TIER_CONTEXT

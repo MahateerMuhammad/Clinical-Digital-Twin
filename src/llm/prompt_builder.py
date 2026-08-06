@@ -393,11 +393,13 @@ class ClinicalPromptBuilder:
                 f'  - **Mean embedding distance:** '
                 f'{np.mean([t["distance"] for t in twins]):.3f}',
                 '',
-                # 0.7253 was the superseded unconditional figure; the conditional
-                # metric in reports/tables/twin_retrieval_evaluation.md gives 0.8044
-                # on the same embeddings.
-                '_Twin outcomes are observed precedent, not a prediction. Retrieval '
-                '(AUROC 0.8044 on 3,000 queries) is weaker than the tabular model._',
+                # Read from SYSTEM_CONSTANTS, not typed here. The literal was 0.7253 —
+                # the superseded unconditional figure — and once corrected it went
+                # stale again on the next re-run of the retrieval harness.
+                f'_Twin outcomes are observed precedent, not a prediction. Retrieval '
+                f'(AUROC {SYSTEM_CONSTANTS["phase7_twin_retrieval_auroc"]:.4f} on '
+                f'{SYSTEM_CONSTANTS["phase7_twin_retrieval_queries"]:,} queries) is '
+                f'weaker than the tabular model._',
             ]
         else:
             parts.append(f'_Unavailable: {twin_error or "this admission could not be embedded"}. '
