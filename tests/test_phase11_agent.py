@@ -23,7 +23,7 @@ import os
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    not os.path.exists("models/best_models/phase1_mortality_lightgbm_winning.pkl"),
+    not os.path.exists("models/best_models/phase1_mortality_winning.pkl"),
     reason="Phase 1-5 models unavailable",
 )
 
@@ -64,7 +64,7 @@ def test_payload_labs_reach_booster_features(agent, payload):
 
     series = agent.runner._convert_payload_to_series(payload)
     names = set(joblib.load(
-        "models/best_models/phase1_mortality_lightgbm_winning.pkl"
+        "models/best_models/phase1_mortality_winning.pkl"
     ).booster_.feature_name())
 
     landed = {k: v for k, v in series.items() if k in names and k.startswith("lab_")}

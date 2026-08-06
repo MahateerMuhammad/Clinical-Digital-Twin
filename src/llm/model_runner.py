@@ -25,7 +25,7 @@ PAYLOAD_FIDELITY = {
     'readmission':   {'reference': 0.7062, 'payload': 0.5673},
     'icu_admission': {'reference': 0.9209, 'payload': 0.6012},
     'hospital_los':  {'reference': 0.8997, 'payload': 0.4894},
-    'deterioration': {'reference': 0.8144, 'payload': 0.6865},
+    'deterioration': {'reference': 0.7858, 'payload': 0.4976},
 }
 
 #: A payload-derived prediction is served only if it keeps at least this fraction of
@@ -85,13 +85,22 @@ class LiveModelRunner:
         self.models_dir = models_dir
         self.data_dir = data_dir
         
-        # Load LightGBM base models and Isotonic Calibrators
+        # Promoted per-task winners and their Isotonic Calibrators.
+        #
+        # The filenames are algorithm-neutral because the promoted model is whichever
+        # algorithm won that task, not necessarily LightGBM. They used to be named
+        # `..._lightgbm_winning.pkl`, and Phase 5's contained an XGBClassifier — the
+        # promotion script had always copied the true winner into a name that said
+        # otherwise. Anyone reading the filename to find out what was being served got
+        # the wrong answer, which is how the deterioration model came to be served
+        # uncalibrated. `_load_pkl` falls back to the legacy name so existing
+        # checkouts keep working.
         self.lgbm_models = {
-            'mortality': self._load_pkl('phase1_mortality_lightgbm_winning.pkl'),
-            'readmission': self._load_pkl('phase2_readmission_lightgbm_winning.pkl'),
-            'icu_admission': self._load_pkl('phase3_icu_admission_lightgbm_winning.pkl'),
-            'hospital_los': self._load_pkl('phase4_hosp_los_stageA_lightgbm_winning.pkl'),
-            'deterioration': self._load_pkl('phase5_deterioration_lightgbm_winning.pkl')
+            'mortality': self._load_pkl('phase1_mortality_winning.pkl'),
+            'readmission': self._load_pkl('phase2_readmission_winning.pkl'),
+            'icu_admission': self._load_pkl('phase3_icu_admission_winning.pkl'),
+            'hospital_los': self._load_pkl('phase4_hosp_los_stageA_winning.pkl'),
+            'deterioration': self._load_pkl('phase5_deterioration_winning.pkl'),
         }
         
         # Deterioration had no entry here, so its raw booster output was served
@@ -109,11 +118,45 @@ class LiveModelRunner:
         self.adm_df = pd.read_parquet(os.path.join(self.data_dir, 'admission_level_selected.parquet')) if os.path.exists(os.path.join(self.data_dir, 'admission_level_selected.parquet')) else None
         self._adm_index = None      # built lazily by get_patient_row
 
+    #: legacy artifact name -> current one, for checkouts promoted before the rename.
+    LEGACY_ARTIFACT_NAMES = {
+        'phase1_mortality_winning.pkl': 'phase1_mortality_lightgbm_winning.pkl',
+        'phase2_readmission_winning.pkl': 'phase2_readmission_lightgbm_winning.pkl',
+        'phase3_icu_admission_winning.pkl': 'phase3_icu_admission_lightgbm_winning.pkl',
+        'phase4_hosp_los_stageA_winning.pkl': 'phase4_hosp_los_stageA_lightgbm_winning.pkl',
+        'phase5_deterioration_winning.pkl': 'phase5_deterioration_lightgbm_winning.pkl',
+    }
+
     def _load_pkl(self, fname):
         path = os.path.join(self.models_dir, fname)
         if os.path.exists(path):
             return joblib.load(path)
+        legacy = self.LEGACY_ARTIFACT_NAMES.get(fname)
+        if legacy:
+            legacy_path = os.path.join(self.models_dir, legacy)
+            if os.path.exists(legacy_path):
+                return joblib.load(legacy_path)
         return None
+
+    def describe_models(self):
+        """
+        What is actually loaded, per task: ``{task: (class name, n_features, calibrated)}``.
+
+        Exists because the filename is not evidence. Phase 5's artifact was called
+        `..._lightgbm_winning.pkl` and held an XGBClassifier; the mismatch went
+        unnoticed until a hardcoded LightGBM assumption started serving raw,
+        uncalibrated output as a clinical figure. Ask the object, not the path.
+        """
+        out = {}
+        for task, model in self.lgbm_models.items():
+            if model is None:
+                out[task] = (None, 0, False)
+                continue
+            names = self._feature_names(model)
+            calibrator = self.calibrators.get(task)
+            out[task] = (type(model).__name__, len(names or []),
+                         calibrator is not None and hasattr(calibrator, 'predict'))
+        return out
 
     #: payload lab field  ->  the windowed booster columns it populates.
     #:

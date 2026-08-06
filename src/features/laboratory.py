@@ -88,13 +88,20 @@ def build_lab_features_vectorised(labevents: pd.DataFrame) -> pd.DataFrame:
     hours paging rather than computing. This produces the same numbers with
     ``groupby().agg()`` in minutes and roughly 1 GB.
 
-    Semantics are preserved deliberately, including one known quirk: when a lab
-    maps to several ``itemid``s (only ``creatinine_wb`` does), the original's
-    ``records[hadm].update(stats)`` meant the highest ``itemid`` present for that
-    admission overwrote the others rather than pooling them. That behaviour is
-    reproduced here so the corrected-vs-baseline model comparison isolates the
-    identifier fix. Pooling is the correct behaviour and should be a separate
-    change.
+    Multi-itemid analytes are pooled, not overwritten
+    ─────────────────────────────────────────────────
+    When a lab maps to several ``itemid``s (only ``creatinine_wb`` does here), the
+    original ``records[hadm].update(stats)`` let the highest ``itemid`` present for an
+    admission **overwrite** the others, silently discarding the rest. That behaviour
+    was reproduced verbatim through the identifier correction so the
+    corrected-vs-baseline comparison isolated one change at a time.
+
+    That comparison is published, so the quirk is now fixed: readings are pooled
+    across every ``itemid`` mapping to the same analyte, which is what the statistics
+    claim to describe. On the current cohort this changes nothing measurable —
+    ``creatinine_wb`` appears in 4,007 admissions and **none** carries both 52024 and
+    52546, so there was never anything to discard. The fix is for the rebuild where
+    that stops being true, which nothing would otherwise report.
     """
     if labevents.empty:
         return pd.DataFrame(columns=["hadm_id"])
@@ -118,9 +125,11 @@ def build_lab_features_vectorised(labevents: pd.DataFrame) -> pd.DataFrame:
     uniq = (labs.groupby(["hadm_id", "itemid"], observed=True).size()
                 .groupby("hadm_id", observed=True).size().rename("lab_unique_items"))
 
-    # ── select the winning itemid per (admission, lab) ───────────────────
-    win = labs.groupby(["hadm_id", "lab_name"], observed=True)["itemid"].transform("max")
-    sel = labs[labs["itemid"] == win]
+    # ── pool every itemid mapping to the same analyte ────────────────────
+    # Previously: keep only rows whose itemid equalled the per-admission max, i.e.
+    # `sel = labs[labs["itemid"] == labs.groupby([...])["itemid"].transform("max")]`.
+    # That silently dropped readings from the lower-numbered assay. See the docstring.
+    sel = labs
 
     keys = ["hadm_id", "lab_name"]
     g = sel.groupby(keys, observed=True)

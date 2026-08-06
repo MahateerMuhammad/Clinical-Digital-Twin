@@ -9,7 +9,7 @@ Why this exists
 ───────────────
 The training pipelines write to ``models/`` under one naming scheme
 (``lightgbm_mortality.pkl``); the serving layer reads from ``models/best_models/``
-under another (``phase1_mortality_lightgbm_winning.pkl``). Nothing in the codebase
+under another (``phase1_mortality_winning.pkl``). Nothing in the codebase
 bridged the two, so promotion was a manual copy-and-rename.
 
 The consequence was silent staleness: after Phases 1-5 were retrained on 2026-07-29
@@ -65,19 +65,19 @@ DST = ROOT / "models" / "best_models"
 #: ``save_models(logreg_c, xgb_c, lgb_c, calibrator)``, so these pickles are the
 #: strict 24-hour observation-window models, which is what should be served.
 PROMOTIONS: List[Tuple[str, str]] = [
-    ("lightgbm_mortality.pkl",              "phase1_mortality_lightgbm_winning.pkl"),
+    ("lightgbm_mortality.pkl",              "phase1_mortality_winning.pkl"),
     ("calibrated_mortality.pkl",            "phase1_mortality_calibrated.pkl"),
-    ("lightgbm_readmission.pkl",            "phase2_readmission_lightgbm_winning.pkl"),
+    ("lightgbm_readmission.pkl",            "phase2_readmission_winning.pkl"),
     ("calibrated_readmission.pkl",          "phase2_readmission_calibrated.pkl"),
-    ("lightgbm_icu_admission.pkl",          "phase3_icu_admission_lightgbm_winning.pkl"),
+    ("lightgbm_icu_admission.pkl",          "phase3_icu_admission_winning.pkl"),
     ("calibrated_icu_admission.pkl",        "phase3_icu_admission_calibrated.pkl"),
-    ("los_stageA_classifier_lightgbm.pkl",  "phase4_hosp_los_stageA_lightgbm_winning.pkl"),
+    ("los_stageA_classifier_lightgbm.pkl",  "phase4_hosp_los_stageA_winning.pkl"),
     ("los_stageA_calibrated.pkl",           "phase4_hosp_los_stageA_calibrated.pkl"),
-    ("los_stageB_regressor_lightgbm.pkl",   "phase4_hosp_los_stageB_lightgbm_winning.pkl"),
-    ("icu_los_stageA_classifier_lightgbm.pkl", "phase4_icu_los_stageA_lightgbm_winning.pkl"),
+    ("los_stageB_regressor_lightgbm.pkl",   "phase4_hosp_los_stageB_winning.pkl"),
+    ("icu_los_stageA_classifier_lightgbm.pkl", "phase4_icu_los_stageA_winning.pkl"),
     ("icu_los_stageA_calibrated.pkl",       "phase4_icu_los_stageA_calibrated.pkl"),
-    ("icu_los_stageB_regressor_lightgbm.pkl", "phase4_icu_los_stageB_lightgbm_winning.pkl"),
-    ("lightgbm_deterioration.pkl",          "phase5_deterioration_lightgbm_winning.pkl"),
+    ("icu_los_stageB_regressor_lightgbm.pkl", "phase4_icu_los_stageB_winning.pkl"),
+    ("lightgbm_deterioration.pkl",          "phase5_deterioration_winning.pkl"),
     ("calibrated_deterioration.pkl",        "phase5_deterioration_calibrated.pkl"),
 ]
 
@@ -106,7 +106,7 @@ def _resolve_deterioration_winner(promotions: List[Tuple[str, str]]) -> List[Tup
 
     out = []
     for src, dst in promotions:
-        if dst == "phase5_deterioration_lightgbm_winning.pkl":
+        if dst == "phase5_deterioration_winning.pkl":
             print(f"  deterioration winner: {info.get('winning_model')} -> {pickle_name}")
             out.append((pickle_name, dst))
         else:

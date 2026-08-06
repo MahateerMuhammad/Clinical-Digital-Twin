@@ -79,11 +79,17 @@ ROOT = _ROOT
 OUT = ROOT / "reports" / "tables" / "payload_fidelity_evaluation.md"
 CONSTANTS_FILE = ROOT / "src" / "llm" / "model_runner.py"
 
-#: Phase 5's proxy target: ward-to-ICU transfer more than `window` hours after
-#: admission. ICU-origin admissions are excluded from the cohort, exactly as
-#: src/models/deterioration.py does — including them would score the model on
-#: patients it was never asked about.
-DETERIORATION_WINDOW_HOURS = 6.0
+#: Phase 5 is a **landmark** analysis: only admissions still at risk at
+#: `DETERIORATION_LANDMARK_HOURS` (still in hospital, not yet in ICU) are scored, and
+#: the outcome is ICU transfer within `DETERIORATION_HORIZON_HOURS` of that landmark.
+#:
+#: These must track `scripts/pipelines/run_deterioration_landmark.py`. They previously
+#: encoded the superseded design (ward-to-ICU transfer at any time after hour 6), which
+#: after the Phase 5 rebuild meant this harness measured the new model against the old
+#: model's target — producing a reference AUROC for a question the model was never
+#: trained to answer, and a serving decision derived from it.
+DETERIORATION_LANDMARK_HOURS = 24.0
+DETERIORATION_HORIZON_HOURS = 48.0
 
 #: Phase 4 Stage A threshold.
 LOS_THRESHOLD_DAYS = 5.63
@@ -115,11 +121,18 @@ def build_cohort(runner: LiveModelRunner, n: int, seed: int) -> pd.DataFrame:
     d["_y_hospital_los"] = (
         pd.to_numeric(d["los_days"], errors="coerce") > LOS_THRESHOLD_DAYS).astype(float)
 
-    icu_origin = ((d["has_icu_stay"] == 1)
-                  & (d["time_to_icu_hrs"] <= DETERIORATION_WINDOW_HOURS))
+    # Landmark cohort: still admitted and still on the ward at T. Anyone discharged or
+    # already in ICU by then is NaN — not a negative — because they never faced the
+    # outcome and scoring them would flatter the model.
+    t_dis = ((pd.to_datetime(d["dischtime"], errors="coerce")
+              - pd.to_datetime(d["admittime"], errors="coerce")).dt.total_seconds() / 3600.0)
+    at_risk = (t_dis > DETERIORATION_LANDMARK_HOURS) & (
+        (d["has_icu_stay"] == 0) | (d["time_to_icu_hrs"] > DETERIORATION_LANDMARK_HOURS))
     det = ((d["has_icu_stay"] == 1)
-           & (d["time_to_icu_hrs"] > DETERIORATION_WINDOW_HOURS)).astype(float)
-    d["_y_deterioration"] = det.where(~icu_origin, np.nan)
+           & (d["time_to_icu_hrs"] > DETERIORATION_LANDMARK_HOURS)
+           & (d["time_to_icu_hrs"] <= DETERIORATION_LANDMARK_HOURS + DETERIORATION_HORIZON_HOURS)
+           ).astype(float)
+    d["_y_deterioration"] = det.where(at_risk, np.nan)
 
     # `prior_*` features are computed by the phase pipelines, not stored in the
     # parquet, and are among the readmission model's strongest inputs. Without them

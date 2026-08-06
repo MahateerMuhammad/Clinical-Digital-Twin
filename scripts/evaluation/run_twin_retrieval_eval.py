@@ -64,6 +64,13 @@ sys.path.insert(0, str(ROOT))
 
 OUT = ROOT / "reports" / "tables" / "twin_retrieval_evaluation.md"
 
+#: Phase 1 Run C, for the comparison in §4. Named constants rather than literals in the
+#: template: these were hardcoded as 0.9062/0.3281, so re-running this script silently
+#: rewrote the report with the pre-leak-fix figures — reverting a correction made in the
+#: generated file. Anything a generator emits has to be fixed in the generator.
+PHASE1_AUROC = 0.9442
+PHASE1_AUPRC = 0.3800
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -180,16 +187,18 @@ at AUROC {auroc:.4f}, and queries whose twins fall in the top decile of twin-mor
 die at {top_decile:.2%} against a {base:.2%} base rate. The embedding is informative;
 the Phase 7 metric was structurally unable to show it.
 
-This does not overturn Phase 7's *comparative* finding — that learned spaces did not
-clearly beat raw scaled features on that metric — but it does mean "no useful signal"
-was the wrong conclusion to draw from it.
+Phase 7's *comparative* finding has since been re-scored as well, and it does not
+survive either: on the conditional metric the hybrid space beats naive raw features by
++0.0734 AUROC with a paired 95% CI of +0.0496 to +0.0978. See
+[`representation_comparison.md`](representation_comparison.md), which scores all four
+Phase 7 spaces on identical queries.
 
 ## 4. Caveat
 
 Retrieval-based prediction is weaker than the trained tabular model
-(Phase 1 Run C: AUROC 0.9062, AUPRC 0.3281). Twin retrieval earns its place by
-supplying *interpretable precedent* — "here are {args.top_k} comparable admissions and
-what happened to them" — not by improving the risk estimate.
+(Phase 1 Run C: AUROC {PHASE1_AUROC:.4f}, AUPRC {PHASE1_AUPRC:.4f}). Twin retrieval
+earns its place by supplying *interpretable precedent* — "here are {args.top_k}
+comparable admissions and what happened to them" — not by improving the risk estimate.
 """, encoding="utf-8")
     print(f"\nReport → {OUT}")
 
