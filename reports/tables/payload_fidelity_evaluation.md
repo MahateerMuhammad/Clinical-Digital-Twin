@@ -1,6 +1,6 @@
 # Payload Fidelity Evaluation (Phase 11 serving gate)
 
-_Generated 2026-08-04 15:16 UTC by `scripts/evaluation/run_payload_fidelity_eval.py`._
+_Generated 2026-08-06 10:17 UTC by `scripts/evaluation/run_payload_fidelity_eval.py`._
 
 Held-out **test** split, 8,000 sampled admissions, seed 0, 400 bootstrap rounds.
 
@@ -23,7 +23,7 @@ phase's published figure, which is what validates the harness itself.
 | readmission | 8,000 | 19.65% | 17.6% | 0.7062 | 0.5673 | 32.6% | [0.250, 0.397] | +0.255 | withheld |
 | icu_admission | 8,000 | 15.28% | 17.6% | 0.9209 | 0.6012 | 24.0% | [0.193, 0.284] | +0.004 | withheld |
 | hospital_los | 8,000 | 25.39% | 17.6% | 0.8997 | 0.4894 | -2.7% | [-0.066, 0.011] | -0.076 | withheld |
-| deterioration | 7,243 | 6.42% | 34.1% | 0.8144 | 0.6865 | 59.3% | [0.523, 0.662] | +0.582 | withheld |
+| deterioration | 5,271 | 2.05% | 23.3% | 0.7858 | 0.4976 | -0.8% | [-0.197, 0.191] | -0.166 | withheld |
 
 ## Reading the table
 

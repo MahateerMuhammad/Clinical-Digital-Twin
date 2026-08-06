@@ -1,5 +1,23 @@
 # Model Performance — Before vs After the Identifier Correction
 
+> [!CAUTION]
+> **Historical record. The "After" column is superseded and is not current performance.**
+>
+> This table documents one specific event — the laboratory-join repair. A **second**
+> correction followed it (the feature-selection repair, which restored creatinine, BUN and
+> haematocrit and closed a `lab_*_mean` full-stay leak), and every figure moved again:
+>
+> | Model | "After" below | Current |
+> | :--- | ---: | ---: |
+> | Phase 1 Mortality — Run C | 0.9062 | **0.9442** |
+> | Phase 2 Readmission — strict 24h | 0.7072 | **0.7158** |
+> | Phase 3 ICU admission | 0.8969 | **0.9219** |
+> | Phase 4 Hospital LOS — Stage A | 0.8350 | **0.9001** |
+> | Phase 5 Deterioration | 0.8221 | **0.8231** |
+>
+> The table is left unedited because rewriting it would misrepresent what the identifier
+> correction actually did. For current figures see the generated tables in this directory.
+
 Both columns are evaluated on the **same held-out test patients**: `patient_split.parquet` was held fixed across the correction, so these deltas isolate the effect of repairing the laboratory join.
 
 > [!NOTE]

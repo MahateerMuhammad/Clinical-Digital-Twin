@@ -1,5 +1,17 @@
 # Phase 4 — Two-Stage Length of Stay (LOS) Prediction: Technical & Clinical Report
 
+> [!NOTE]
+> **Figures refreshed 2026-08-06** against
+> [`tables/los_two_stage_results.md`](tables/los_two_stage_results.md), which is regenerated
+> from the models on disk. This document is hand-written and does not update itself, so it
+> had drifted two corrections behind — the laboratory-join repair and the feature-selection
+> repair.
+>
+> Stage A hospital LOS moved 0.8114 → **0.9001** AUROC and 0.5434 → **0.7576** AUPRC, and
+> Stage B regression improved materially as well (deployment MAE 1.36 → **1.05** days,
+> $R^2$ 0.1162 → **0.2563**). ICU LOS Stage A moved 0.6381 → **0.8527**. Feature count
+> moved 110 → **170**.
+
 ---
 
 ## 1. Executive Summary & Literature Rationale
@@ -58,19 +70,23 @@ Stage A models (Logistic Regression, XGBoost, LightGBM) were trained with 3-fold
 
 | Target | Model Name | Run Protocol | AUROC | AUPRC | Base Rate AUPRC | Brier Score | Decision Threshold | F1 Score | Precision | Recall |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Hospital LOS** | Logistic Regression | Stage A (Admission) | 0.7940 | 0.5045 | 0.2486 | 0.1917 | 0.5231 | 0.5541 | 0.4232 | 0.8022 |
-| **Hospital LOS** | XGBoost | Stage A (Admission) | 0.8079 | 0.5373 | 0.2486 | 0.1856 | 0.5367 | 0.5647 | 0.4378 | 0.7951 |
-| **Hospital LOS** | **LightGBM** | Stage A (Admission) | **0.8114** | **0.5434** | 0.2486 | 0.1837 | 0.5393 | **0.5698** | 0.4437 | 0.7960 |
-| **Hospital LOS** | **LightGBM (Calibrated)** | Stage A (Admission) | **0.8112** | **0.5367** | 0.2486 | **0.1446** | 0.2820 | 0.5696 | 0.4382 | 0.8137 |
-| **ICU LOS** | Logistic Regression | Stage A (Admission) | 0.6210 | 0.3429 | 0.2498 | 0.2385 | 0.4389 | 0.4246 | 0.2886 | 0.8029 |
-| **ICU LOS** | XGBoost | Stage A (Admission) | 0.6406 | 0.3666 | 0.2498 | 0.2301 | 0.4342 | 0.4359 | 0.2998 | 0.7982 |
-| **ICU LOS** | **LightGBM** | Stage A (Admission) | **0.6381** | **0.3646** | 0.2498 | 0.2258 | 0.4171 | **0.4328** | 0.2972 | 0.7960 |
-| **ICU LOS** | **LightGBM (Calibrated)** | Stage A (Admission) | **0.6372** | **0.3557** | 0.2498 | **0.1787** | 0.1943 | 0.4319 | 0.2926 | 0.8246 |
+| **Hospital LOS** | Logistic Regression | Stage A (Admission) | 0.8873 | 0.7356 | 0.2486 | 0.1403 | 0.5089 | 0.6628 | 0.5641 | 0.8034 |
+| **Hospital LOS** | XGBoost | Stage A (Admission) | 0.8973 | 0.7527 | 0.2486 | 0.1343 | 0.5349 | 0.6768 | 0.5877 | 0.7978 |
+| ★ **Hospital LOS** | **LightGBM** | Stage A (Admission) | **0.9001** | **0.7576** | 0.2486 | 0.1323 | 0.5524 | **0.6845** | 0.5989 | 0.7985 |
+| ★ **Hospital LOS** | **LightGBM (Calibrated)** | Stage A — served | **0.9001** | **0.7503** | 0.2486 | **0.1072** | 0.2852 | 0.6791 | 0.5775 | 0.8241 |
+| **ICU LOS** | Logistic Regression | Stage A (Admission) | 0.8374 | 0.6689 | 0.2498 | 0.1618 | 0.3912 | 0.5895 | 0.4589 | 0.8237 |
+| **ICU LOS** | XGBoost | Stage A (Admission) | 0.8527 | 0.6970 | 0.2498 | 0.1521 | 0.3999 | 0.6058 | 0.4781 | 0.8265 |
+| **ICU LOS** | **LightGBM** | Stage A (Admission) | **0.8527** | **0.6962** | 0.2498 | 0.1489 | 0.3886 | **0.6095** | 0.4835 | 0.8243 |
+| **ICU LOS** | **LightGBM (Calibrated)** | Stage A (Admission) | **0.8523** | **0.6830** | 0.2498 | **0.1239** | 0.1919 | 0.6037 | 0.4714 | 0.8392 |
 
 ### Classification Takeaways
-*   **Hospital LOS Classification:** LightGBM achieves an AUROC of **0.8114** and AUPRC of **0.5434** (a **2.19x enrichment** over the $0.2486$ base rate).
-*   **ICU LOS Classification:** LightGBM achieves an AUROC of **0.6381** and AUPRC of **0.3646** (a **1.46x enrichment** over the $0.2498$ base rate).
-*   **Probability Calibration:** Isotonic regression reduces Hospital LOS Brier Score from **0.1837 → 0.1446** ($21.3\%$ error reduction) and ICU LOS Brier Score from **0.2258 → 0.1787** ($20.9\%$ error reduction).
+*   **Hospital LOS Classification:** LightGBM achieves an AUROC of **0.9001** and AUPRC of **0.7576** (a **3.05x enrichment** over the $0.2486$ base rate).
+*   **ICU LOS Classification:** LightGBM achieves an AUROC of **0.8527** and AUPRC of **0.6962** (a **2.79x enrichment** over the $0.2498$ base rate).
+*   **Probability Calibration:** Isotonic regression reduces Hospital LOS Brier Score from **0.1323 → 0.1072** ($19.0\%$ error reduction) and ICU LOS Brier Score from **0.1489 → 0.1239** ($16.8\%$ error reduction), with no measurable ranking cost on hospital LOS.
+*   **ICU LOS was the weakest model in the project and no longer is.** It moved from AUROC
+    0.6381 — barely better than guessing — to **0.8527** once the laboratory join was
+    repaired. The earlier figure reflected a cohort where roughly half of admissions had no
+    labs, which hurt the ICU sub-cohort hardest because it is the most lab-dense.
 
 ---
 
@@ -82,21 +98,38 @@ Stage B regressors (XGBoost `reg:squarederror` and LightGBM `regression`) were t
 
 | Target | Model Name | Evaluation Scope | Sample Size ($N$) | MAE (days) | RMSE (days) | $R^2$ Score |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Hospital LOS** | **LightGBM Regressor** | Predicted Short Bucket (Deployment Primary) | 44,580 | **1.3622** | **3.3330** | **0.1162** |
-| **Hospital LOS** | **XGBoost Regressor** | Predicted Short Bucket (Deployment Primary) | 44,580 | **1.3640** | **3.3309** | **0.1172** |
-| **Hospital LOS** | **LightGBM Regressor** | Actual Short Bucket (Optimistic Bound) | 62,221 | **0.8723** | **1.1196** | **0.4401** |
-| **Hospital LOS** | **XGBoost Regressor** | Actual Short Bucket (Optimistic Bound) | 62,221 | **0.8745** | **1.1216** | **0.4380** |
-| **ICU LOS** | **LightGBM Regressor** | Predicted Short Bucket (Deployment Primary) | 3,812 | **1.7935** | **4.5315** | **-0.0645** |
-| **ICU LOS** | **XGBoost Regressor** | Predicted Short Bucket (Deployment Primary) | 3,812 | **1.7927** | **4.5318** | **-0.0647** |
-| **ICU LOS** | **LightGBM Regressor** | Actual Short Bucket (Optimistic Bound) | 9,660 | **0.7855** | **0.9568** | **0.0327** |
-| **ICU LOS** | **XGBoost Regressor** | Actual Short Bucket (Optimistic Bound) | 9,660 | **0.7851** | **0.9562** | **0.0339** |
+| **Hospital LOS** | **LightGBM Regressor** | Predicted Short Bucket (Deployment Primary) | 53,429 | **1.0548** | **2.0101** | **0.2563** |
+| **Hospital LOS** | **XGBoost Regressor** | Predicted Short Bucket (Deployment Primary) | 53,429 | **1.0607** | **2.0140** | **0.2534** |
+| **Hospital LOS** | **LightGBM Regressor** | Actual Short Bucket (Optimistic Bound) | 62,221 | **0.7963** | **1.0365** | **0.5201** |
+| **Hospital LOS** | **XGBoost Regressor** | Actual Short Bucket (Optimistic Bound) | 62,221 | **0.8017** | **1.0411** | **0.5158** |
+| **ICU LOS** | **LightGBM Regressor** | Predicted Short Bucket (Deployment Primary) | 7,150 | **0.9669** | **1.7026** | **0.0170** |
+| **ICU LOS** | **XGBoost Regressor** | Predicted Short Bucket (Deployment Primary) | 7,150 | **0.9676** | **1.7037** | **0.0157** |
+| **ICU LOS** | **LightGBM Regressor** | Actual Short Bucket (Optimistic Bound) | 9,660 | **0.7298** | **0.8990** | **0.1460** |
+| **ICU LOS** | **XGBoost Regressor** | Actual Short Bucket (Optimistic Bound) | 9,660 | **0.7299** | **0.8989** | **0.1461** |
 
 ### Regression Takeaways & Low $R^2$ Framing
-*   **Hospital LOS Duration Accuracy:** Within the short stay bucket ($ \le 5.63$ days), LightGBM/XGBoost regressors predict hospital stay duration with a **Mean Absolute Error (MAE) of ~1.36 days** under the realistic deployment pipeline.
-*   **ICU LOS Duration Accuracy:** Within the short ICU stay bucket ($ \le 4.18$ days), actual short-stay duration is predicted with an **MAE of 0.78 days** (under 19 hours error).
+*   **Hospital LOS Duration Accuracy:** Within the short stay bucket ($ \le 5.63$ days), LightGBM/XGBoost regressors predict hospital stay duration with a **Mean Absolute Error (MAE) of ~1.05 days** under the realistic deployment pipeline — improved from ~1.36 days.
+*   **ICU LOS Duration Accuracy:** Within the short ICU stay bucket ($ \le 4.18$ days), actual short-stay duration is predicted with an **MAE of 0.73 days** (about 17 hours error).
+*   **The deployment bucket is larger now** (44,580 → 53,429 admissions) because the stronger
+    Stage A classifier routes more patients correctly, which is why deployment MAE improved
+    even though the optimistic bound improved less.
 
 > [!WARNING]
-> **Explicit Stage B Framing Statement:** Even within the restricted short-stay bucket ($ \le 5.63$ days for hospital, $ \le 4.18$ days for ICU), Stage B regressors yield low coefficient of determination scores ($R^2 = 0.1162$ for hospital LOS, $R^2 = -0.0645$ for ICU LOS under primary deployment). Exact length of stay prediction at the second of hospital admission using early-presentation features remains inherently noisy and low-variance. **Stage B outputs must be read as a rough directional estimate rather than a precise forecast.** The primary clinical utility of this pipeline resides in Stage A binary risk stratification (identifying patients at high risk of prolonged hospitalization), while Stage B provides approximate duration bounds for short-stay planning.
+> **Explicit Stage B Framing Statement:** Even within the restricted short-stay bucket ($ \le 5.63$ days for hospital, $ \le 4.18$ days for ICU), Stage B regressors yield low coefficient of determination scores ($R^2 = 0.2563$ for hospital LOS, $R^2 = 0.0170$ for ICU LOS under primary deployment). Exact length of stay prediction at the second of hospital admission using early-presentation features remains inherently noisy and low-variance. **Stage B outputs must be read as a rough directional estimate rather than a precise forecast.** The primary clinical utility of this pipeline resides in Stage A binary risk stratification (identifying patients at high risk of prolonged hospitalization), while Stage B provides approximate duration bounds for short-stay planning.
+>
+> ICU LOS Stage B is the weakest component in the project. Its deployment $R^2$ has moved
+> from **negative** (−0.0645, worse than predicting the mean) to **0.0170** — no longer
+> harmful, but still close to no explanatory power. Duration of an ICU stay is not
+> predictable from admission-time features on this cohort, and should be presented as a
+> planning heuristic only.
+
+> [!CAUTION]
+> **This model is not usable from a presentation payload.** Measured on the held-out split,
+> an unseen-patient payload supports AUROC **0.489** for Stage A hospital LOS against
+> **0.900** from the full admission record — *below chance*, meaning the model ranks
+> patients backwards when denied the features it depends on. Hospital-LOS risk is
+> therefore **withheld** from Phase 11 reports. See
+> [`tables/payload_fidelity_evaluation.md`](tables/payload_fidelity_evaluation.md).
 
 ---
 
@@ -104,16 +137,39 @@ Stage B regressors (XGBoost `reg:squarederror` and LightGBM `regression`) were t
 
 The top-10 SHAP features driving Stage A classification (Long vs. Short Stay) for LightGBM are:
 
-### Hospital LOS Stage A Top SHAP Features:
-1.  `admission_location_TRANSFER FROM HOSPITAL` (mean |SHAP| = 0.3124) — Inter-facility transfer route.
-2.  `lab_bun_first` (mean |SHAP| = 0.1985) — Presenting blood urea nitrogen.
-3.  `anchor_age` (mean |SHAP| = 0.1542) — Patient demographic age.
-4.  `lab_wbc_first` (mean |SHAP| = 0.1421) — Presenting white blood cell count.
-5.  `prior_cumulative_los_days` (mean |SHAP| = 0.1385) — Historical hospital utilization.
-6.  `prior_admissions_365d` (mean |SHAP| = 0.1294) — Prior 1-year readmission history.
-7.  `lab_glucose_first` (mean |SHAP| = 0.1150) — Presenting blood glucose.
-8.  `admission_type_SURGICAL SAME DAY ADMISSION` (mean |SHAP| = 0.1082) — Planned surgical intake.
-9.  `admission_type_EU OBSERVATION` (mean |SHAP| = 0.0984) — Emergency observation intake.
-10. `lab_platelets_first` (mean |SHAP| = 0.0912) — Presenting platelet count.
+Regenerated by `scripts/evaluation/run_explainability_audit.py`; see
+[`tables/explainability_audit.md`](tables/explainability_audit.md). Leakage screen: **CLEAN**.
 
-The SHAP audit confirms that long stays are driven by emergency transfer routing, age, baseline chronic comorbidities, prior utilization, and initial metabolic/renal lab derangements available at admission.
+### Hospital LOS Stage A Top SHAP Features:
+1.  `admission_type_EU OBSERVATION` (1.1676) — Emergency observation intake.
+2.  `diagnosis_count` (0.9656) — Comorbidity burden and coding-process proxy.
+3.  `procedure_count` (0.5230) — Intervention intensity.
+4.  `admission_type_DIRECT OBSERVATION` (0.2600) — Direct observation route.
+5.  `prior_cumulative_los_days` (0.1199) — Historical hospital utilization.
+6.  `admit_hour` (0.1071) — Time of arrival.
+7.  `days_since_last_discharge` (0.0948) — Recency of prior utilisation.
+8.  `pre_admission_charlson_index` (0.0926) — Baseline chronic comorbidity.
+9.  `lab_platelets_first_24h` (0.0524) — Presenting platelet count.
+10. `admission_type_SURGICAL SAME DAY ADMISSION` (0.0507) — Planned surgical intake.
+11. `lab_creatinine_first_24h` (0.0494) — Presenting renal function.
+12. `admission_location_PROCEDURE SITE` (0.0493) — Procedural admission route.
+13. `admission_location_PHYSICIAN REFERRAL` (0.0468) — Referral route.
+14. `marital_status_MARRIED` (0.0420) — See caution below.
+15. `marital_status_SINGLE` (0.0418) — See caution below.
+
+Long stays are driven predominantly by **admission pathway** — the top four features are
+all routing or workload counts — followed by prior utilisation history and, more weakly,
+presenting labs.
+
+> [!CAUTION]
+> **This is an administrative model more than a physiological one, and it should be
+> described as such.** The earlier version of this section said long stays are driven by
+> "initial metabolic/renal lab derangements"; in the current model the strongest lab feature
+> ranks 9th with roughly 1/22nd the influence of the top feature.
+>
+> **`marital_status_MARRIED` and `marital_status_SINGLE` appearing in the top 15 is a
+> social-determinant signal, not a clinical one.** Discharge planning is materially harder
+> for patients without a partner at home, so marital status genuinely predicts length of
+> stay — but a model that lengthens its own prediction because a patient is single is
+> encoding a placement constraint, not an illness. This should be monitored as an equity
+> risk if Stage A output is ever used to prioritise beds or discharge resources.

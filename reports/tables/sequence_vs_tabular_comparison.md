@@ -1,5 +1,23 @@
 # Phase 6 — Sequence vs. Tabular Model Comparison
 
+> [!CAUTION]
+> **Both sides of this table predate the feature-selection repair. Do not update one side
+> alone.**
+>
+> The tabular baseline row quotes Phase 1 Run C at **0.9062 / 0.3281**; Phase 1 is now
+> **0.9442 / 0.3800**. The obvious edit — refresh the tabular row — would be wrong, because
+> the LSTM and Transformer were trained on Kaggle against the *same* static feature set that
+> the repair changed, and have not been re-run. Updating one side would present a
+> like-for-like comparison that was never actually run.
+>
+> **The verdict is unaffected in direction and is if anything strengthened.** The tabular
+> baseline was ahead on AUPRC (0.3281 vs 0.3009) and Phase 1 has since improved to 0.3800,
+> so engineered 24-hour summaries still match or beat the raw event sequence.
+>
+> To make this table citable as current, re-run the Phase 6 Kaggle notebook
+> (`07_sequence_model_kaggle.ipynb`) against the corrected feature set and regenerate both
+> sides together.
+
 ## 1. Executive Summary & Methodological Alignment
 
 This report evaluates PyTorch sequential models (**LSTM/GRU baseline** and a small **Transformer Encoder**) trained on multi-event 24-hour clinical trajectories (`time_series.parquet`) concatenated with 24-hour static presentation features (`admission_level_selected.parquet`) for in-hospital mortality prediction. Models were evaluated on held-out test subjects.

@@ -11,19 +11,19 @@ Phase 7 embedding space are retrieved, excluding every admission belonging to th
 patient. The neighbours' observed outcome rate is then treated as a prediction of the
 query patient's outcome.
 
-Queries: 2,000 sampled at random (seed 7); observed deaths
-37 (1.85%).
+Queries: 3,000 sampled at random (seed 7); observed deaths
+71 (2.37%).
 
 ## 2. Results
 
 | Metric | Value | Interpretation |
 | :--- | ---: | :--- |
-| Mortality AUROC | **0.8044** | ranking quality from retrieval alone, no model |
-| Mortality AUPRC | **0.3136** | 17.0x the 0.0185 base rate |
-| Top-decile observed mortality | **10.96%** | **5.93x** enrichment |
-| ICU-stay AUROC | 0.8608 | secondary outcome |
-| Mean twin distance | 1.936 | Euclidean, embedding space |
-| _Unconditional mean twin mortality_ | _0.0229_ | _1.24x — see §3_ |
+| Mortality AUROC | **0.7793** | ranking quality from retrieval alone, no model |
+| Mortality AUPRC | **0.2261** | 9.6x the 0.0237 base rate |
+| Top-decile observed mortality | **12.57%** | **5.31x** enrichment |
+| ICU-stay AUROC | 0.8561 | secondary outcome |
+| Mean twin distance | 1.955 | Euclidean, embedding space |
+| _Unconditional mean twin mortality_ | _0.0213_ | _0.90x — see §3_ |
 
 ## 3. Why this differs from the Phase 7 verdict
 
@@ -35,11 +35,11 @@ That statistic tends to 1.0 regardless of embedding quality. If the embedding wo
 neighbours of high-risk patients are high-risk and neighbours of low-risk patients are
 low-risk; averaging over a representative sample recovers the base rate. It cannot
 separate a good embedding from a random one, and this run reproduces it exactly
-(1.24x).
+(0.90x).
 
 Conditioning on the query reverses the picture: the same neighbours rank query mortality
-at AUROC 0.8044, and queries whose twins fall in the top decile of twin-mortality
-die at 10.96% against a 1.85% base rate. The embedding is informative;
+at AUROC 0.7793, and queries whose twins fall in the top decile of twin-mortality
+die at 12.57% against a 2.37% base rate. The embedding is informative;
 the Phase 7 metric was structurally unable to show it.
 
 Phase 7's *comparative* finding has since been re-scored as well, and it does not
@@ -51,6 +51,6 @@ Phase 7 spaces on identical queries.
 ## 4. Caveat
 
 Retrieval-based prediction is weaker than the trained tabular model
-(Phase 1 Run C: AUROC 0.9442, AUPRC 0.3800). Twin retrieval earns its place by
-supplying *interpretable precedent* — "here are 10 comparable admissions and
-what happened to them" — not by improving the risk estimate.
+(Phase 1 Run C: AUROC 0.9442, AUPRC 0.3800). Twin retrieval
+earns its place by supplying *interpretable precedent* — "here are 10
+comparable admissions and what happened to them" — not by improving the risk estimate.

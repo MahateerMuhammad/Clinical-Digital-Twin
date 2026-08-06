@@ -10,6 +10,21 @@
 > only for the before/after comparison in
 > [`tables/model_comparison_before_after.md`](tables/model_comparison_before_after.md).
 
+> [!CAUTION]
+> **A second correction followed this one. The post-correction figures in this document
+> are themselves superseded.**
+>
+> This notice records the identifier/laboratory-join repair of 2026-07-29 and its
+> 0.9490 → 0.9062 effect on Phase 1 Run C. A later **feature-selection repair** restored
+> creatinine, BUN and haematocrit to the selected set and closed a `lab_*_mean` full-stay
+> leak, moving Phase 1 Run C again to **0.9442 / 0.3800**. Phases 2–5 moved likewise; see
+> [`tables/model_comparison_before_after.md`](tables/model_comparison_before_after.md) for
+> the full then-and-now.
+>
+> Every "after" figure below should be read as *"after the join repair, before the
+> feature-selection repair"*. The document is deliberately left otherwise unedited: it is a
+> record of what one correction did, and revising its numbers would destroy that.
+
 > [!IMPORTANT]
 > Several distinct defects were corrected, not one. The identifier fix **raised**
 > performance by restoring laboratory data to half the cohort; the leakage fixes
