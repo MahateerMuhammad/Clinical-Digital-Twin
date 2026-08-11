@@ -148,3 +148,57 @@ def test_tier_context_prose_uses_the_current_rates():
     for i, text in enumerate(TIER_CONTEXT.values(), start=1):
         rate = SYSTEM_CONSTANTS[f"phase9_tier{i}_observed_mortality_pct"]
         assert f"{rate}%" in text, f"tier {i} prose quotes a stale rate: {text}"
+
+
+def test_deterioration_horizon_matches_the_promoted_model():
+    """
+    The horizon quoted to clinicians must match the model that was actually promoted.
+
+    Phase 5 was rebuilt as a landmark analysis (assess at 24h, predict 48h ahead), but
+    `phase5_deterioration_window_hours: 6.0` — the *lead time* of the superseded
+    case-control design — survived the rebuild and was still being rendered as
+    "deterioration within 6 hours". The report therefore described a horizon eight times
+    more urgent than the model predicts, on a cohort of patients already stable for a
+    day. Nothing failed; the sentence was simply false.
+    """
+    import json
+
+    from src.llm.report_composer import SYSTEM_CONSTANTS
+
+    meta = Path("models/best_models/phase5_deterioration_landmark.json")
+    if not meta.exists():
+        pytest.skip("landmark metadata absent; run scripts/pipelines/run_deterioration_landmark.py")
+
+    cfg = json.loads(meta.read_text(encoding="utf-8"))
+    assert SYSTEM_CONSTANTS["phase5_landmark_hours"] == cfg["landmark_hours"], (
+        f"SYSTEM_CONSTANTS landmark {SYSTEM_CONSTANTS['phase5_landmark_hours']}h disagrees "
+        f"with the promoted model's {cfg['landmark_hours']}h")
+    assert SYSTEM_CONSTANTS["phase5_horizon_hours"] == cfg["horizon_hours"], (
+        f"SYSTEM_CONSTANTS horizon {SYSTEM_CONSTANTS['phase5_horizon_hours']}h disagrees "
+        f"with the promoted model's {cfg['horizon_hours']}h")
+
+
+def test_no_stale_six_hour_deterioration_label_is_rendered():
+    """
+    The superseded '6-hour' phrasing must not reach a clinician.
+
+    Checked against the strings that are actually rendered rather than against module
+    source: the source legitimately mentions "within 6 hours" in the comment recording
+    why the constant was removed, and a test that forbids describing a fixed defect
+    pressures the next person to delete the explanation.
+    """
+    from src.llm.clinical_assistant import _SECONDARY_OUTCOMES
+    from src.llm.report_composer import SYSTEM_CONSTANTS, TASK_LABELS
+
+    rendered = [TASK_LABELS["p_deterioration"]] + [
+        label for key, label, _ in _SECONDARY_OUTCOMES if key == "p_deterioration"]
+
+    for text in rendered:
+        assert "6 hour" not in text.lower() and "6-hour" not in text.lower(), (
+            f"deterioration is labelled {text!r}; Phase 5 is a "
+            "24h-landmark / 48h-horizon model")
+        assert "48" in text, f"deterioration label omits its horizon: {text!r}"
+
+    assert "phase5_deterioration_window_hours" not in SYSTEM_CONSTANTS, (
+        "the superseded lead-time constant is back; use phase5_landmark_hours and "
+        "phase5_horizon_hours")

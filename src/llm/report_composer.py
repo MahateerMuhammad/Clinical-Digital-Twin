@@ -52,7 +52,16 @@ SYSTEM_CONSTANTS: Dict[str, float] = {
     "phase9_tier4_observed_mortality_pct": 25.24,
     "phase4_hosp_los_threshold_days": 5.63,
     "phase4_icu_los_threshold_days": 4.18,
-    "phase5_deterioration_window_hours": 6.0,
+    # Phase 5 landmark design, from models/best_models/phase5_deterioration_landmark.json.
+    #
+    # `phase5_deterioration_window_hours: 6.0` used to live here and was quoted to
+    # clinicians as "deterioration within 6 hours". That was the *lead time* of the
+    # superseded case-control design, and it survived the landmark rebuild untouched —
+    # so the report described a 6-hour horizon while the model predicted a 48-hour one,
+    # for patients who had already been stable for 24 hours. A clinician reading 3% would
+    # have understood something eight times more urgent than the model actually claims.
+    "phase5_landmark_hours": 24.0,
+    "phase5_horizon_hours": 48.0,
     # Conditional twin-retrieval AUROC, from reports/tables/twin_retrieval_evaluation.md.
     # Quoted to clinicians in the twin section of the structured prompt, so it lives
     # here rather than as a literal in prompt_builder — where it sat at 0.7253, a figure
@@ -124,7 +133,8 @@ TASK_LABELS = {
     "p_readmission": "30-day readmission",
     "p_icu_admission": "ICU admission during this stay",
     "p_los_over_5_63d": "Hospital stay beyond 5.63 days",
-    "p_deterioration": "Clinical deterioration within 6 hours",
+    "p_deterioration": ("ICU transfer within 48 hours "
+                        "(assessed at 24 hours, patient stable to that point)"),
 }
 
 

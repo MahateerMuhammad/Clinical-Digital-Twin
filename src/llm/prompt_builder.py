@@ -335,7 +335,8 @@ class ClinicalPromptBuilder:
         n_readm = sum(t['readmission_30d'] for t in twins)
 
         los_thr = SYSTEM_CONSTANTS['phase4_hosp_los_threshold_days']
-        det_hrs = SYSTEM_CONSTANTS['phase5_deterioration_window_hours']
+        det_landmark = SYSTEM_CONSTANTS['phase5_landmark_hours']
+        det_horizon = SYSTEM_CONSTANTS['phase5_horizon_hours']
 
         parts = [
             f'### CLINICAL DIGITAL TWIN PATIENT REPORT (t = 24h)',
@@ -362,7 +363,8 @@ class ClinicalPromptBuilder:
             _risk_line(preds, 'p_los_over_5_63d',
                        f'Hospital Length of Stay > {los_thr} Days Risk'),
             _risk_line(preds, 'p_deterioration',
-                       f'{det_hrs:.0f}-Hour Early Deterioration Warning Score'),
+                       f'{det_horizon:.0f}-Hour ICU Transfer Risk '
+                       f'(assessed at {det_landmark:.0f}h)'),
             '',
             '---',
             '',

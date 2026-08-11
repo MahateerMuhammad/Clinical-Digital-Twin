@@ -16,7 +16,9 @@ from src.llm.llm_engine import RealLLMEngine
 _SECONDARY_OUTCOMES = (
     ('p_readmission', '30-Day Hospital Readmission Risk', ' (Population Base Rate: 20.03%)'),
     ('p_icu_admission', 'Emergency ICU Admission Risk', ''),
-    ('p_deterioration', '6-Hour Early Deterioration Warning Score', ''),
+    # Not "6-Hour": Phase 5 is a landmark model assessed at 24h with a 48h horizon.
+    # See SYSTEM_CONSTANTS in report_composer.
+    ('p_deterioration', '48-Hour ICU Transfer Risk (assessed at 24h)', ''),
 )
 
 

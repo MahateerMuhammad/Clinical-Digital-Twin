@@ -8,6 +8,7 @@ paths:
     hosp: data/raw/hosp
     icu: data/raw/icu
     notes: data/raw/note
+    ed: data/raw/ED
   interim: data/interim
   processed: data/processed
   external: data/external
@@ -25,6 +26,48 @@ io:
   parquet_compression: snappy
   parquet_engine: pyarrow
 tables:
+  edstays:
+    file: edstays.csv
+    source: ed
+    date_cols:
+    - intime
+    - outtime
+    id_cols:
+    - subject_id
+    - hadm_id
+    - stay_id
+    cat_cols:
+    - arrival_transport
+    large: false
+  triage:
+    file: triage.csv
+    source: ed
+    date_cols: []
+    id_cols:
+    - subject_id
+    - stay_id
+    cat_cols: []
+    large: false
+  ed_vitalsign:
+    file: vitalsign.csv
+    source: ed
+    date_cols:
+    - charttime
+    id_cols:
+    - subject_id
+    - stay_id
+    cat_cols: []
+    large: true
+  medrecon:
+    file: medrecon.csv
+    source: ed
+    date_cols:
+    - charttime
+    id_cols:
+    - subject_id
+    - stay_id
+    cat_cols: []
+    large: true
   patients:
     file: patients.csv
     source: hosp

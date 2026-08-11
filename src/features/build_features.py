@@ -12,6 +12,7 @@ from typing import Dict, Optional
 import pandas as pd
 
 from src.features.diagnosis import build_diagnosis_features
+from src.features.emergency import build_ed_features
 from src.features.icu import build_fluid_features, build_icu_stay_features
 from src.features.interactions import build_interaction_features
 from src.features.laboratory import build_lab_features_chunked, build_lab_features_from_df
@@ -89,6 +90,22 @@ class FeatureBuilder:
             if ce_path.exists():
                 features["vitals"] = build_vital_features_chunked(str(ce_path))
 
+        # Emergency department. Needs `admissions` as well as its own tables,
+        # because every ED observation is timestamped against `admittime` before
+        # it is allowed to become a feature.
+        if "edstays" in tables and not tables["edstays"].empty:
+            admissions = tables.get("admissions", pd.DataFrame())
+            if admissions.empty:
+                log.warning("edstays present but admissions absent; skipping ED features")
+            else:
+                features["emergency"] = build_ed_features(
+                    tables["edstays"],
+                    admissions,
+                    triage=tables.get("triage"),
+                    vitalsign=tables.get("ed_vitalsign"),
+                    medrecon=tables.get("medrecon"),
+                )
+
         # Notes
         if "discharge" in tables and not tables["discharge"].empty:
             note_feats = extract_note_features(tables["discharge"])
@@ -119,7 +136,7 @@ class FeatureBuilder:
         result = admissions.copy()
         hadm_features = [
             "diagnosis", "procedure", "laboratory", "laboratory_24h",
-            "medication", "notes_admission",
+            "medication", "notes_admission", "emergency",
         ]
         for name in hadm_features:
             if name in features and features[name] is not None and not features[name].empty:

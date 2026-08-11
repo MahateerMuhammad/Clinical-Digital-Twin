@@ -101,6 +101,46 @@ FULL_STAY_LAB_AGGREGATES = [
 WINDOWED_LAB_FEATURES = ["lab_*_24h"]
 
 
+# ── Emergency-department families ─────────────────────────────────────────────
+#
+# ED features are the first ward-grade physiology in this pipeline, and they are
+# genuinely pre-admission (99.7% of ED intime precedes admittime). But the ED
+# module covers only 37.1% of the cohort, so *presence* carries information that
+# has nothing to do with the patient's state, and that is the failure mode which
+# forced the Phase 5 rebuild. These lists exist so the risk is named and
+# switchable rather than buried in a missingness pattern.
+
+# Never a feature under any protocol. `disposition` is the ED outcome; `outtime`
+# is the departure timestamp whose modelling-safe derivative is `ed_los_hours`.
+ED_OUTCOME_DERIVED = ["disposition", "ed_disposition", "ed_outtime"]
+
+# The explicit "this patient came through the ED" flag. Excluded from primary
+# models: it is a cohort-membership indicator, not a measurement, and a tree will
+# happily split on it to recover the ED subpopulation's base rate.
+ED_AVAILABILITY_FEATURES = ["ed_available"]
+
+# A nurse's 1-5 ESI severity judgement. It partly *causes* the ICU decision
+# rather than predicting it — the same shape as the testing-volume features
+# removed in the Phase 5 rebuild — so it belongs in a sensitivity arm and is
+# excluded from every primary model.
+ED_ACUITY_FEATURES = ["ed_triage_acuity"]
+
+# How often the patient was observed, not what was observed. A patient recorded
+# 14 times in the ED was being watched closely; that is a clinician's concern
+# leaking in as a feature, exactly like the ICU `vital_*_count` family.
+ED_MONITORING_INTENSITY = ["ed_vital_*_count", "ed_n_stays"]
+
+# Everything an ED-free protocol must drop to stay comparable with the
+# pre-ED baseline snapshots.
+ED_ALL_FEATURES = ["ed_*"]
+
+# The default guard for a primary model: keep the physiology, drop the artefacts.
+ED_EXCLUDE_PRIMARY = (
+    ED_OUTCOME_DERIVED + ED_AVAILABILITY_FEATURES
+    + ED_ACUITY_FEATURES + ED_MONITORING_INTENSITY
+)
+
+
 MORTALITY_EXCLUDE = [
     # Direct outcome and duration leakage
     "deathtime", "dischtime", "discharge_location", "los_days", "los_hours", "dod",
@@ -110,7 +150,7 @@ MORTALITY_EXCLUDE = [
     "readmission_30d", "next_admittime", "days_to_readmission", "readmit_*",
     # Post-hoc ICU stay accumulation metrics
     "icu_los_days", "n_icu_stays", "has_icu_stay", "icu_*",
-]
+] + ED_EXCLUDE_PRIMARY
 
 # Run C: Strict 24h Early Observation Window (Excludes all full-stay aggregates, last lab values, slopes, care-unit transfers, and clinical notes)
 MORTALITY_EXCLUDE_RUN_C = MORTALITY_EXCLUDE + [
@@ -131,7 +171,7 @@ MORTALITY_EXCLUDE_RUN_B = MORTALITY_EXCLUDE + WINDOWED_LAB_FEATURES
 
 READMISSION_EXCLUDE = [
     "next_admittime", "days_to_readmission", "deathtime", "dischtime", "discharge_location",
-] + WINDOWED_LAB_FEATURES
+] + WINDOWED_LAB_FEATURES + ED_EXCLUDE_PRIMARY
 
 # Strict 24h Early Observation Window Readmission Filter (Living Cohort + 24h Window Discipline)
 READMISSION_EXCLUDE_STRICT = [
@@ -147,7 +187,7 @@ READMISSION_EXCLUDE_STRICT = [
     "note_type", "charttime", "text_clean", "readability_flesch", "text_tfidf_ready",
     # Post-hoc ICU stay accumulation metrics
     "icu_los_days", "n_icu_stays", "has_icu_stay", "icu_*",
-] + DISCHARGE_NOTE_DERIVED + FULL_STAY_LAB_COUNTERS + FULL_STAY_MED_CLASS + FULL_STAY_LAB_AGGREGATES
+] + DISCHARGE_NOTE_DERIVED + FULL_STAY_LAB_COUNTERS + FULL_STAY_MED_CLASS + FULL_STAY_LAB_AGGREGATES + ED_EXCLUDE_PRIMARY
 
 # icu_* / fluids_* / vitals_* features are only populated for admissions that
 # already had an ICU stay — using them to predict ICU admission is leaking
@@ -156,7 +196,7 @@ ICU_ADMISSION_EXCLUDE = [
     "icu_los_days", "n_icu_stays", "has_icu_stay",
     "icu_*", "fluids_*", "vitals_*",
     "first_careunit", "last_careunit",
-]
+] + ED_EXCLUDE_PRIMARY
 
 # Strict 24h Early Observation Window / Admission-Time ICU Risk prediction filter
 # Excludes all post-admission aggregates, slopes, lasts, notes readability, and care unit transfers.
@@ -180,7 +220,7 @@ ICU_ADMISSION_EXCLUDE_STRICT = ICU_ADMISSION_EXCLUDE + [
 
 LOS_EXCLUDE = [
     "dischtime", "discharge_location", "deathtime",
-]
+] + ED_EXCLUDE_PRIMARY
 
 # Strict 24h Early Observation Window / Admission-Time Length of Stay filter
 # Excludes direct target proxies, post-hoc ICD codes, full-stay aggregates, notes readability, and care unit transfers.
@@ -210,7 +250,7 @@ DETERIORATION_EXCLUDE = [
     "dischtime", "deathtime", "discharge_location", "dod", "los_days", "los_hours",
     "hospital_expire_flag", "first_careunit*", "last_careunit*", "intime*", "outtime*",
     "icu_los_days", "n_icu_stays", "has_icu_stay", "next_admittime", "days_to_readmission", "readmission_30d",
-]
+] + ED_EXCLUDE_PRIMARY
 
 # Strict Clinical Deterioration Exclusion List
 # Excludes direct target proxies, post-hoc care unit transfers, discharge outcomes, post-hoc ICD coding,

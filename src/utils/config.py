@@ -35,6 +35,7 @@ class RawPaths:
     hosp: str = "data/raw/hosp"
     icu: str = "data/raw/icu"
     notes: str = "data/raw/note"
+    ed: str = "data/raw/ED"
 
 
 @dataclass
@@ -130,6 +131,8 @@ class Config:
             base = self.paths.raw.icu
         elif src in ("notes", "note"):
             base = self.paths.raw.notes
+        elif src == "ed":
+            base = self.paths.raw.ed
         else:
             raise ValueError(f"Unknown source '{src}' for table '{table_name}'")
 
@@ -205,6 +208,7 @@ def load_config(config_path: Optional[Path] = None) -> Config:
             hosp=raw_p.get("hosp", cfg.paths.raw.hosp),
             icu=raw_p.get("icu", cfg.paths.raw.icu),
             notes=raw_p.get("notes", cfg.paths.raw.notes),
+            ed=raw_p.get("ed", cfg.paths.raw.ed),
         ),
         interim=p.get("interim", cfg.paths.interim),
         processed=p.get("processed", cfg.paths.processed),

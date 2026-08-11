@@ -176,11 +176,16 @@ Models were trained using class-imbalance weighting on **85 features** and evalu
 | **LightGBM** | **0.8231** | **0.3739** | 0.0595 | 0.1636 | N/A | **6.28x** |
 
 > [!IMPORTANT]
-> **The served model is XGBoost, not LightGBM**, despite the artifact being named
-> `phase5_deterioration_lightgbm_winning.pkl`. LightGBM has the higher AUROC (0.8231 vs
-> 0.8196) but XGBoost has the higher **AUPRC** (0.3771 vs 0.3739), which is the selection
-> criterion for a 5.95% base-rate task — ranking the positives well matters more than
-> ranking the whole cohort. Only XGBoost has a fitted isotonic calibrator.
+> **The winning model here was XGBoost, not LightGBM.** LightGBM had the higher AUROC
+> (0.8231 vs 0.8196) but XGBoost the higher **AUPRC** (0.3771 vs 0.3739), which is the
+> selection criterion for a 5.95% base-rate task — ranking the positives well matters more
+> than ranking the whole cohort. Only XGBoost had a fitted isotonic calibrator.
+>
+> The artifact was named `phase5_deterioration_lightgbm_winning.pkl` while holding an
+> XGBClassifier, which is how the wrong model was served for a period. It has since been
+> renamed `phase5_deterioration_winning.pkl`, and `LiveModelRunner` keeps a legacy-name
+> fallback so older checkouts still load. Verify a promoted model with
+> `type(joblib.load(...)).__name__`, never by reading its filename.
 >
 > The filename is misleading and is retained only because the serving layer addresses it by
 > that path. Verify with `type(joblib.load(...)).__name__`, not by reading the filename.
