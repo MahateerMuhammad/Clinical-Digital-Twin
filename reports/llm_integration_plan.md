@@ -6,14 +6,28 @@
 
 The goal of this project is to build an end-to-end **Clinical Digital Twin Platform** that predicts patient trajectories and provides actionable clinical decision support. 
 
+> [!WARNING]
+> **This document is a proposal, not a status report.** It was written on 2026-07-25
+> and describes the platform as it was planned, including AUROC figures that predate
+> the ID-collision repair and the Phase 5 landmark rebuild. Every number below should
+> be read as an intention of that date.
+>
+> For what is actually built and measured, use:
+> - `reports/llm_layer_design.md` — the live LLM design and build order
+> - `reports/tables/payload_fidelity_evaluation.md` — which tasks are servable
+> - `reports/tables/llm_end_to_end_evaluation.md` and `phase11_clinical_agent_evaluation.md`
+> - `reports/data_correction_notice.md` — the corrections this document predates
+
 ### Development Roadmap Sequence
-1. **Phase 1 (COMPLETED):** In-Hospital Mortality Prediction (Strict 24h Window, Calibrated LightGBM AUROC = 0.9484).
-2. **Phase 2 (COMPLETED):** 30-Day Unplanned Readmission Prediction (Strict 24h Window + Expansions A&D, Calibrated LightGBM AUROC = 0.7094).
-3. **Phase 3 (NEXT STEP):** Core Clinical Digital Twin Trajectory Engine (Length of Stay Prediction & ICU Decompensation Early Warning).
-4. **Phase 4 (FUTURE STEP):** LLM Conversational Interface & Pharmacological Reasoning Engine Integration.
+1. **Phase 1 (COMPLETED):** In-Hospital Mortality Prediction (Strict 24h Window).
+2. **Phase 2 (COMPLETED):** 30-Day Unplanned Readmission Prediction (Strict 24h Window + Expansions A&D).
+3. **Phase 3-5 (COMPLETED):** Trajectory engine — ICU admission, length of stay, and clinical deterioration. Deterioration was rebuilt as a **landmark** model (assessed at 24h, 48h horizon), superseding the 6-hour case-control design this document assumed.
+4. **Phase 4 → the LLM layer (BUILT):** implemented across `src/llm/`, with grounding, RAG, terminology resolution, counterfactuals and an end-to-end evaluation. Its remaining build order lives in `llm_layer_design.md §5`.
 
 > [!IMPORTANT]
-> **Core Principle:** Machine learning predictive modeling (Phases 1–3) forms the deterministic, empirical foundation. The Large Language Model (Phase 4) serves strictly as the conversational front-end, clinical reasoner, and discharge/pharmacology documentation assistant.
+> **Core Principle:** Machine learning predictive modeling forms the deterministic, empirical foundation. The Large Language Model serves strictly as the conversational front-end and documentation assistant.
+>
+> One clarification the sections below do not make, and which the implementation settled: **the LLM does not reason clinically.** The models produce the risk numbers, RAG produces the evidence, and a deterministic composer writes the report. The LLM only rephrases finished text, and a grounding verifier discards its output if anything fails to trace. Where this document says the LLM "evaluates", "issues warnings" or "assesses", the built system means the deterministic path does that and the LLM restates it.
 
 ---
 
@@ -160,19 +174,22 @@ To ensure the LLM never hallucinates and can pull verified data from external me
 ## 6. Phase-by-Phase Execution Plan & Milestones
 
 ```
-Phase 1: Mortality Model  ──────► [COMPLETED - LightGBM AUROC 0.9484]
+Phase 1: Mortality Model  ──────► [COMPLETED]
                                            │
-Phase 2: Readmission Model ─────► [COMPLETED - LightGBM AUROC 0.7094]
+Phase 2: Readmission Model ─────► [COMPLETED]
                                            │
-Phase 3: Digital Twin Core ─────► [NEXT STEP - Length of Stay & Decompensation]
+Phase 3-5: Digital Twin Core ───► [COMPLETED - ICU admission, LOS, deterioration]
                                            │
-Phase 4: LLM Integration ───────► [PLANNED - Multi-Provider LLM & Grounded RAG Engine]
+Phase 4: LLM Integration ───────► [BUILT - see llm_layer_design.md §5 for what remains]
 ```
 
+For current model performance, read the per-phase reports rather than this section —
+the figures that were here predated the ID-collision repair and the landmark rebuild.
+
 ### Milestone Timeline:
-- **Milestone 3.1:** Implement Phase 3 ICU Decompensation & Length-of-Stay models.
-- **Milestone 3.2:** Build multi-task Clinical Digital Twin unified feature pipeline.
-- **Milestone 4.1:** Deploy Ollama / Gemini LLM API Bridge (`llm_narrative_bridge.py`).
-- **Milestone 4.2:** Build Grounded RAG Vector Database for FDA drug labels & clinical guidelines.
-- **Milestone 4.3:** Implement natural language EHR note extraction & counterfactual simulator.
-- **Milestone 4.4:** Validate LLM pharmacological warnings against clinical guidelines.
+- ~~**Milestone 3.1:** Phase 3 ICU Decompensation & Length-of-Stay models.~~ Done.
+- ~~**Milestone 3.2:** Multi-task unified feature pipeline.~~ Done.
+- ~~**Milestone 4.1:** Ollama / Gemini LLM bridge.~~ Done, as `src/llm/backends.py` — Ollama, Transformers (with QLoRA adapter support) and a Null fallback, selected at runtime. No `llm_narrative_bridge.py` exists; the composer is `report_composer.py`.
+- ~~**Milestone 4.2:** Grounded RAG vector database.~~ Done, as `src/llm/rag_corpus.py`, evaluated in `reports/tables/rag_retrieval_evaluation.md`.
+- ~~**Milestone 4.3:** Counterfactual simulator.~~ Done, in `src/llm/clinical_agent.py`, evaluated in `reports/tables/phase11_clinical_agent_evaluation.md`. Natural-language note extraction is **not** built — payloads are structured, and the terminology resolver normalises the diagnosis field only.
+- **Milestone 4.4:** Validate warnings against clinical guidelines — **outstanding.** The verifier proves traceability, not clinical correctness; it cannot detect a correctly-quoted guideline that does not apply to this patient. That needs clinician review of the corpus and the retrieval gold set, and it remains the one open safety item.

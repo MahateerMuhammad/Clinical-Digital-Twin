@@ -124,13 +124,96 @@ retrieval gold set, which is the outstanding work item.
 
 ## 5. Build order
 
-1. **Expand the payload schema** so `_convert_payload_to_series` covers more of
-   the trained feature space. Currently the pipeline withholds predictions for a
-   realistic payload because coverage is ~8%; this is the highest-value fix and it
-   is not an LLM task.
+1. ~~**Expand the payload schema**~~ — **done, 2026-08-10.** The figure quoted here
+   was "~8%"; the measured value was 18.3%, which is the sort of drift this repo
+   keeps producing and the reason step 5 exists.
+
+   Two causes, and only the second was the one named:
+
+   - `_convert_payload_to_series` reconstructed dummy names by hand (`gender_M = 0.0`)
+     instead of emitting source categoricals and letting `encode_admission_frame`
+     expand them. A female patient therefore reached Phase 5 as `gender_M = 0.0`
+     with `gender_F` absent — "not male, sex unknown".
+   - The schema never asked for race, language, insurance, marital status,
+     admission type/location or prior utilisation. Those one-hot expansions are 86
+     of the mortality model's 164 features, and `prior_*` is the Expansion A&D block
+     Phase 2 was built on — the readmission model was being asked its question with
+     the patient's own readmission history withheld.
+
+   A complete payload now reaches **67.7%** of the mortality feature space (91.5%
+   for deterioration). Retention against the 66.7% floor, before → after:
+
+   | Task | Before | After | Served |
+   | :--- | ---: | ---: | :--- |
+   | mortality | 78.0% | **85.6%** | yes |
+   | readmission | 32.6% | **81.7%** | now served |
+   | icu_admission | 24.0% | **75.6%** | now served |
+   | deterioration | −0.8% | **91.6%** | now served |
+   | hospital_los | −2.7% | 57.9% | still withheld |
+
+   Reference AUROCs are unchanged (0.9448 / 0.7062 / 0.9209 / 0.8997 / 0.7858), which
+   is what makes the comparison valid: the stored-row path was never affected. It
+   already worked, because the parquet holds these columns as `CategoricalDtype`
+   carrying every level, so `get_dummies` emitted the full family. Only the payload
+   path, which built plain strings, lost the siblings.
+
+   `hospital_los` stays withheld at 57.9%. It is close, and it is the honest place to
+   stop: length of stay depends on disposition and social factors a presentation
+   payload does not carry, and the floor is not there to be lowered until things pass.
+
 2. Generate the ~3k-example dataset from the cohort.
 3. QLoRA fine-tune 3B on Kaggle (~3h).
 4. Export the adapter, load via `TransformersBackend(adapter_path=...)`.
-5. Measure: % of generations passing the verifier, on a held-out set. That number
-   is the LLM layer's headline metric — and unlike the Phase 11 benchmark, it is
-   actually computed.
+5. ~~Measure: % of generations passing the verifier, on a held-out set.~~
+   **Harness built 2026-08-12**, and moved ahead of steps 2-4 — see below.
+   `scripts/evaluation/run_llm_rephrase_eval.py`.
+
+> [!WARNING]
+> **Step 3's training pairs do not match what inference asks for.**
+>
+> §3 above specifies examples of the form *(structured bundle → composed report)*.
+> But `pipeline.py` calls `backend.rephrase(deterministic_md, system_prompt)` — the
+> model receives the **finished markdown**, not a bundle. Training would teach
+> composition; inference asks for rewriting. That is a train/serve mismatch, and it
+> is the same defect this project keeps producing: two descriptions of one thing,
+> maintained separately, drifting apart.
+>
+> There is a second problem underneath it. If the target is the deterministic report
+> and the input becomes that same report, the pair teaches the identity function —
+> a model that reproduces its input perfectly, which is what the composer already
+> does for free. Producing genuinely more readable targets needs a teacher model
+> (distillation) or human rewriting. Neither is free, and neither is in §3.
+
+### Why step 5 was built first
+
+Fine-tuning is worth three GPU hours only if a stock instruct model fails the
+verifier often enough to matter. Nobody had measured that, so steps 2-4 rested on an
+assumption. The harness turns it into a number, and it needs no GPU.
+
+It reports three things together, because the headline alone is misleading:
+
+| Measure | Why it is there |
+| :--- | :--- |
+| Verifier pass rate | the headline: share of LLM outputs that survive grounding |
+| Similarity to input | a model that passes by echoing its input scores 100% and is useless |
+| Readability change | the only reason this stage exists |
+
+The decision rule the harness encodes:
+
+- **High pass rate, low similarity** — the stage works. No fine-tune needed.
+- **High pass rate, high similarity** — the stage is inert. Fine-tuning will not fix
+  that; the prompt or the model choice will.
+- **Low pass rate** — not a safety failure, since the pipeline fails closed and the
+  deterministic text ships. It means the stage costs latency and returns nothing,
+  and *this* is the case where fine-tuning on the output contract is the right
+  remedy — with the input/target correction above applied first.
+
+Nothing about the architecture changes either way: the LLM never reasons, and the
+verifier gates it. This decides only whether the optional stage earns its place.
+
+> [!NOTE]
+> Steps 2-5 are deferred pending a decision on whether to run them at all. They
+> change how the report *reads*; step 1 changed what the system can *answer*. With
+> four of five tasks now servable, the fine-tune is polish on a working deterministic
+> composer, and the composer currently passes every published requirement at 100%
+> with no LLM loaded.

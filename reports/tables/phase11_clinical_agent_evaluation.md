@@ -19,7 +19,7 @@ counterfactuals over the supplied physiology.
 | :--- | ---: | ---: |
 | SHAP drivers faithful to the payload | **100.0%** | 100% |
 | Counterfactual connected to the model (raw output) | **100.0%** | 100% |
-| Change survives isotonic calibration | 94.4% | reported |
+| Change survives isotonic calibration | 100.0% | reported |
 | Counterfactual directionally sane | **100.0%** | 90% |
 | Evidence retrieved | **100.0%** | 90% |
 | Reports pass fail-closed grounding | **100.0%** | 100% |
@@ -33,25 +33,33 @@ clinician would expect to correct — and report the mean change in predicted mo
 
 | Phenotype | Diagnosis | Predicted mortality | Tier | Δ after normalisation | Tier changed |
 | :--- | :--- | ---: | :---: | ---: | ---: |
-| Septic shock | `sepsis` | 10.84% | Tier 3 | -10.59 pp | 3/3 |
-| Stage 3 AKI | `acute kidney injury` | 0.80% | Tier 2 | -0.76 pp | 0/3 |
-| Diabetic ketoacidosis | `diabetic ketoacidosis` | 18.60% | Tier 4 | -15.25 pp | 3/3 |
-| Decompensated heart failure | `heart failure` | 0.27% | Tier 2 | -0.07 pp | 0/3 |
-| Severe pneumonia | `pneumonia` | 1.20% | Tier 2 | -1.18 pp | 1/3 |
-| Upper GI haemorrhage | `gastrointestinal bleeding` | 1.20% | Tier 2 | -1.05 pp | 3/3 |
+| Septic shock | `sepsis` | 18.60% | Tier 4 | -16.57 pp | 3/3 |
+| Stage 3 AKI | `acute kidney injury` | 1.20% | Tier 2 | -1.76 pp | 1/3 |
+| Diabetic ketoacidosis | `diabetic ketoacidosis` | 24.06% | Tier 4 | -19.93 pp | 3/3 |
+| Decompensated heart failure | `heart failure` | 0.17% | Tier 2 | -0.04 pp | 1/3 |
+| Severe pneumonia | `pneumonia` | 2.74% | Tier 3 | -1.88 pp | 1/3 |
+| Upper GI haemorrhage | `gastrointestinal bleeding` | 1.20% | Tier 2 | -1.09 pp | 3/3 |
 
 ## 4. The limitation that defines this phase
 
-**A payload populates 18.3% of the mortality model's features.** The
-remaining 81.7% are zero-filled: `diagnosis_count`, `procedure_count`,
-the admission-type and admission-location dummies, and the per-analyte draw counts
-and missing-ratios. None of them can be derived from a payload, because they describe
-an admission that has not happened yet.
+**A payload populates 67.7% of the mortality model's features.** The
+remaining 32.3% reach the booster as NaN — its native missing value, the
+one it was fitted with — not as zeros. Chiefly `diagnosis_count`, `procedure_count`
+and the per-analyte draw counts and missing-ratios: none can be derived from a
+payload, because they describe an admission that has not happened yet.
 
-This is not a defect to be fixed — it is what predicting for an unseen patient means.
-But it has two consequences that must travel with any Phase 11 output:
+The admission-type and admission-location dummies were listed here too, until
+2026-08-10. They were never unsuppliable; the schema simply did not ask for them.
+Asking, along with race, language, insurance, marital status and prior utilisation,
+roughly tripled this figure and took ICU admission, readmission and deterioration
+over the payload-serving floor. The remaining gap is the part that genuinely cannot
+be closed — worth stating precisely, because "unsuppliable" was doing work here that
+"not yet requested" should have been doing.
 
-* `diagnosis_count` is consistently the largest SHAP driver, at a zero-filled value.
+This residue is not a defect to be fixed — it is what predicting for an unseen
+patient means. But it has two consequences that must travel with any Phase 11 output:
+
+* `diagnosis_count` is consistently the largest SHAP driver, at a missing value.
   The model is partly responding to the *absence* of admission history rather than to
   the physiology supplied.
 * Absolute probabilities from a payload are not comparable with those from a cohort

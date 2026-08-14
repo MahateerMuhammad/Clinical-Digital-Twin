@@ -280,7 +280,108 @@ grounding verifier correctly refused to emit a report quoting an ungroundable nu
 
 ---
 
-## 9. Reproducing the audit
+## 9. Emergency-department features (added 2026-08-07, **not yet consumed**)
+
+> [!IMPORTANT]
+> **The ED feature set is staged, not in production. No published figure in this
+> repository uses it.**
+
+MIMIC-IV-ED was integrated to address the finding recorded in §6 and repeated in the
+Phase 1 and Phase 5 reports: `chartevents` is ICU-only, so `admission_level_selected`
+carries **no `vital_*` columns at all** and every model predicts physiology through
+proxies. `src/features/emergency.py` produces 66 features — triage vitals, serial ED
+vitals, ED length of stay, arrival mode, and home-medication reconciliation — for the
+202,415 admissions (37.1%) with a linked ED stay.
+
+**What was verified before staging it:**
+
+| Check | Result |
+| :--- | :--- |
+| New patients introduced | **0** — ED joins onto admissions, never creates them |
+| Cohort fingerprint | unchanged (`7aed4ec6a8d4ab7d`) |
+| ED `intime` precedes `admittime` | 99.7% (median −4.8h) |
+| Observations after `admittime` | dropped (41% of ED vital rows) |
+| Availability leakage (`ed_available` alone) | AUROC **0.5097** mortality, 0.5018 ICU, 0.4985 readmission |
+| Missing ED data | NaN, never 0.0 |
+
+The availability check is the one that mattered: partial coverage meant "has ED data"
+could have carried the outcome by itself, which is the mechanism that forced the Phase
+5 rebuild. Measured, it does not — 0.5097 is noise. The guard is retained in every
+exclusion list regardless, and `tests/test_ed_features.py` pins it so a future change
+to the linkage rule cannot quietly turn presence into a severity marker.
+
+**Why the figure of 37.1% and not ~69%.** An earlier estimate used
+`admission_location == 'EMERGENCY ROOM'`, which covers 244,179 admissions. The ED
+*module* is a separate partial capture: only 56.5% of those admissions have an ED
+record. The correct coverage is 37.1% of the cohort, and the gain is **0% → 37%
+vitals coverage**, not the 16% → 75% first projected.
+
+**Status and cost of adoption.** Consuming these features requires rebuilding
+`admission_level_selected.parquet` and retraining Phases 1–5. Because the patient split
+is untouched, before/after models remain directly comparable on identical test
+patients — so this is a controlled experiment rather than a rebuild, and the current
+results stay valid and citable until it is run.
+`reports/tables/ed_feature_coverage.md` derives its status line from the selected
+matrix, so it will report adoption automatically rather than on trust.
+
+## 10. Payload serving schema (corrected 2026-08-10)
+
+Four of the five models were withheld from payload-based reports because a
+presentation payload retained too little of their validated discrimination. That was
+recorded as an intrinsic limit of predicting for an unseen patient. It was mostly a
+defect in the serving path.
+
+**What was wrong.** `LiveModelRunner._convert_payload_to_series` built the feature
+vector by writing booster column names directly — `gender_M = 1.0` — instead of
+emitting the source categorical and letting `encode_admission_frame` expand it, which
+is how the models were fitted. One-hot families therefore arrived with a single
+member set and every sibling missing. A female patient reached Phase 5 as
+`gender_M = 0.0` with `gender_F` absent: not male, sex unknown.
+
+Separately, `payload_validation.py` never asked for race, language, insurance,
+marital status, admission type/location, or prior utilisation. Those expansions are
+86 of the mortality model's 164 features, and `prior_*` is the Expansion A&D block
+Phase 2 was built on — the readmission model was being asked its question with the
+patient's own readmission history withheld.
+
+**Why it was invisible.** The stored-row path was never affected, and it is the
+reference the payload path is measured against. `admission_level_selected.parquet`
+holds these columns as `CategoricalDtype` carrying every level, so `get_dummies`
+emitted the full family with its zeros. Only a payload, which carries plain strings,
+lost the siblings. The two paths diverged in exactly the place the comparison could
+not see, and the shortfall was attributed to the payload concept rather than its
+implementation.
+
+**Effect.** Coverage of the mortality feature space went from 18.3% to 67.7%
+(deterioration 24.0% → 91.5%). Retention against the unchanged 66.7% floor:
+
+| Task | Before | After | Served |
+| :--- | ---: | ---: | :--- |
+| mortality | 78.0% | **85.6%** | was, still is |
+| readmission | 32.6% | **81.7%** | now served |
+| icu_admission | 24.0% | **75.6%** | now served |
+| deterioration | −0.8% | **91.6%** | now served |
+| hospital_los | −2.7% | 57.9% | still withheld |
+
+Reference AUROCs are unchanged — 0.9448 / 0.7062 / 0.9209 / 0.8997 / 0.7858 — which
+is what makes the before/after comparison sound: only the payload arm moved.
+
+**What was not done.** The retention floor was not lowered, and `hospital_los` stays
+withheld at 57.9%. It is near the boundary, and that is the point of having fixed the
+boundary in advance: length of stay depends on discharge planning and social
+circumstances a presentation payload does not describe. `diagnosis_count` and
+`procedure_count` were also deliberately left unmapped — they are counts of what the
+hospital has coded by hour 24, and claiming them would have raised the coverage
+figure without a clinician being able to supply them.
+
+**Pinned by.** `tests/test_feature_space_onehot.py` (the known-zero vs unknown
+distinction, per row) and `tests/test_payload_categoricals.py`, which includes a test
+that every field the converter reads is one the schema actually asks for — the
+specific gap that let this persist.
+
+---
+
+## 11. Reproducing the audit
 
 ```bash
 python scripts/dev/run_id_corruption_rebuild.py --audit             # damage report, read-only

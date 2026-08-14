@@ -43,6 +43,22 @@ To prevent models from memorizing patient-specific baseline quirks, we strictly 
 
 ## 3. Strict Leakage Audit & Protocol Evolution
 
+> [!CAUTION]
+> **Vital signs do not reach this model.** The served model has **170 features** and
+> **zero** `vital_*` or `news2_*` columns, verified against `feature_names_in_`.
+>
+> This is not a leakage exclusion — it is an absence. Vitals derive from `chartevents`,
+> which is ICU-only in MIMIC-IV and keyed by `stay_id`; roughly 83% of hospital
+> admissions have none, and none merges to the admission grain. The composition is
+> admission and demographic dummies, 24-hour windowed labs, prior-utilisation history
+> and counts. See Phase 1 §3 for the full accounting.
+>
+> It is worth stating explicitly *here* because ICU admission is the task a reader is
+> most likely to assume vitals drive. The 0.92 AUROC is achieved without a single
+> heart rate or blood pressure — which is also why the ED module matters: ED triage
+> vitals are the only admission-grain physiology available for this cohort, and they
+> are built but not yet consumed (`data_correction_notice.md` §9).
+
 To establish a mathematically and clinically valid predictor, we audited the feature space for various target leakage paths and evolved a strictTiming protocol:
 
 ### A. Care Unit Department Leakage (Dropped 2 Features)
@@ -79,14 +95,22 @@ We trained L2 Regularized Logistic Regression, XGBoost, and LightGBM models usin
     them lifted AUPRC by **+0.21**, by far the largest gain of any phase — which is
     consistent with ICU triage being the most laboratory-driven of the five tasks.
 
-> [!CAUTION]
-> **This model is not usable from a presentation payload.** Measured on the held-out
-> split, an unseen-patient payload supports only AUROC **0.601** for this task against
-> **0.921** from the full admission record — 24% of the validated discrimination, and a
-> rank correlation with the full-record prediction of **+0.004**. ICU-admission risk is
-> therefore **withheld** from Phase 11 reports. See
-> [`tables/payload_fidelity_evaluation.md`](tables/payload_fidelity_evaluation.md).
-> The figures above hold for stored admissions, where the full feature row is available.
+> [!NOTE]
+> **Payload serving: enabled since 2026-08-10.** This model was previously withheld
+> from payload-based reports, supporting only AUROC **0.601** against **0.921** from
+> the full admission record — 24% of the validated discrimination, with a rank
+> correlation of **+0.004** to the full-record prediction.
+>
+> That was a limitation of the payload *schema*, not of the model. The serving path
+> reconstructed one-hot dummy names by hand and never asked for race, language,
+> insurance, marital status, admission type/location or prior utilisation. Supplying
+> them takes payload AUROC to **0.818** — **75.6%** retention, ρ **+0.793** — which
+> clears the 66.7% floor, so ICU-admission risk is now served from a payload.
+>
+> Current figures are in
+> [`tables/payload_fidelity_evaluation.md`](tables/payload_fidelity_evaluation.md);
+> that table is the authority, not this note. The figures in the sections above are
+> for stored admissions, where the full feature row is available and always was.
 
 ---
 

@@ -2,6 +2,18 @@
 
 Generated: 2026-07-18T16:47:43.549275Z
 
+> [!NOTE]
+> **This is an index, not an analysis.** It lists the figures the EDA
+> stage produced and states no statistics or conclusions of its own.
+> Findings live in the per-phase reports; dataset-level numbers live in
+> `cleaning_report.md` and `data_dictionary.md`.
+>
+> Its date therefore carries no staleness risk of the kind that affected
+> the model reports: there is no number here to have gone out of date.
+> The figures themselves predate the ID-collision repair, so any plot of
+> a laboratory distribution should be re-read from the current data
+> before being quoted.
+
 Total figures created: 276
 
 ## Figures

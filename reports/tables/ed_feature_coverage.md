@@ -1,5 +1,12 @@
 # Emergency Department Feature Coverage
 
+> [!IMPORTANT]
+> **Status: staged, not consumed. No trained model uses these features.**
+>
+> `admission_level_selected.parquet` carries **0** `ed_` columns, so every published metric in `reports/` was produced *without* ED data. The feature set is built, tested and leakage-screened, but it is not wired into the modelling matrix.
+>
+> Consuming it requires rebuilding the selected matrix and retraining Phases 1-5. The cohort and the patient split are unaffected either way — ED data joins onto admissions and never creates them, which `tests/test_ed_features.py` asserts — so this can be done later without invalidating anything already published.
+
 Generated from `/Users/mc/Projects/Clinical-Digital-Twin/data/interim/features/emergency_features.parquet` (window: admittime + 0h).
 
 - Cohort admissions: **546,028**

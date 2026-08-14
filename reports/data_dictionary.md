@@ -14,6 +14,33 @@ Generated: 2026-08-01T11:57:01.954824Z
 | similarity               |   546028 |       35 |
 | admission_level_selected |   546028 |      275 |
 
+## Staged Feature Sets (built, not consumed)
+
+These are engineered and persisted but merge into no dataset above, so no
+trained model uses them. This section is derived by comparing the interim
+feature files against the dataset columns — a set listed here disappears
+from it automatically once adopted.
+
+| feature set   | file                                               |   rows |   features | example columns                                                   |
+|:--------------|:---------------------------------------------------|-------:|-----------:|:------------------------------------------------------------------|
+| emergency     | `data/interim/features/emergency_features.parquet` | 202415 |         66 | `ed_los_hours`, `ed_n_stays`, `ed_arrival_ambulance`              |
+| fluids        | `data/interim/features/fluids_features.parquet`    |  93739 |          5 | `fluid_input_total`, `fluid_input_count`, `fluid_output_total`    |
+| vitals        | `data/interim/features/vitals_features.parquet`    |  94442 |        117 | `vital_dbp_mean`, `vital_gcs_total_mean`, `vital_heart_rate_mean` |
+
+Notes on each:
+
+- **emergency** — MIMIC-IV-ED triage, serial vitals, stay linkage and medication
+  reconciliation, keyed to `hadm_id`. Covers 202,415 of 546,028 admissions (37.1%);
+  admissions without an ED stay hold NaN, never 0.0. Leakage-screened and pinned by
+  `tests/test_ed_features.py`. Full per-feature coverage in
+  [`tables/ed_feature_coverage.md`](tables/ed_feature_coverage.md); adoption status
+  and cost in [`data_correction_notice.md`](data_correction_notice.md) §9.
+- **vitals** and **fluids** — keyed per **ICU stay**, not per admission. They cover
+  ~94,000 ICU stays against 546,028 admissions, so ~83% of the cohort has none and
+  neither set merges to the admission grain. This is why Phases 1-4 contain zero
+  `vital_*` columns; see Phase 1 §3. They are not staged for adoption at the
+  admission level — the grain mismatch is structural, not an oversight.
+
 ## Feature Dictionary (sample)
 
 | dataset         | feature                              | dtype          |   n_missing |   pct_missing |   n_unique | example                |

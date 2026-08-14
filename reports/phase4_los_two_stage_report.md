@@ -55,6 +55,20 @@ The cohort is strictly split by `subject_id` using the shared `patient_split.par
 
 ## 3. Strict Leakage Audit & Protocol Evolution
 
+> [!CAUTION]
+> **Vital signs do not reach this model.** Stage A has **170 features** and **zero**
+> `vital_*` or `news2_*` columns, verified against `feature_names_in_`.
+>
+> This is an absence, not one of the exclusions listed below. Vitals derive from
+> `chartevents`, which is ICU-only in MIMIC-IV and keyed by `stay_id`; roughly 83% of
+> hospital admissions have none, and none merges to the admission grain. The
+> composition is admission and demographic dummies, 24-hour windowed labs,
+> prior-utilisation history and counts. See Phase 1 §3 for the full accounting.
+>
+> The distinction matters for reading the exclusion list: 154 columns were dropped
+> *deliberately* as leakage, and it would be easy to assume vitals were among them and
+> could be recovered by relaxing the protocol. They could not — they were never there.
+
 To maintain 100% real-time admission discipline, we applied `LOS_EXCLUDE_STRICT` (dropping 154 leakage columns):
 1. **Outcome & Resolution Proxies Dropped:** `dischtime`, `discharge_location`, `deathtime`, `los_days`, `los_hours`, `dod`, `hospital_expire_flag`, `next_admittime`, `days_to_readmission`, `readmission_30d`, `icu_los_days`, `has_icu_stay`, `n_icu_stays`.
 2. **Post-Hoc Diagnosis Codes Dropped:** `charlson_comorbidity_index`, `cci_*`, `dx_*`, `primary_icd_code`. Baseline comorbidities are dynamically computed from prior historical stays (`pre_admission_charlson_index`).
@@ -124,11 +138,18 @@ Stage B regressors (XGBoost `reg:squarederror` and LightGBM `regression`) were t
 > planning heuristic only.
 
 > [!CAUTION]
-> **This model is not usable from a presentation payload.** Measured on the held-out split,
-> an unseen-patient payload supports AUROC **0.489** for Stage A hospital LOS against
-> **0.900** from the full admission record — *below chance*, meaning the model ranks
-> patients backwards when denied the features it depends on. Hospital-LOS risk is
-> therefore **withheld** from Phase 11 reports. See
+> **This model is still not served from a presentation payload** — the only one of the
+> five that is not. Measured on the held-out split, a payload supports AUROC **0.731**
+> for Stage A hospital LOS against **0.900** from the full admission record: **57.9%**
+> of the validated discrimination, below the 66.7% floor.
+>
+> This is a large improvement on the earlier figure of 0.489 — *below chance*, the
+> model ranking patients backwards — which came from a payload schema that omitted
+> the admission and prior-utilisation features. It is no longer backwards, and it is
+> no longer far from the floor. It remains withheld because length of stay depends on
+> discharge planning, placement and social circumstances that a presentation payload
+> does not describe, and lowering the floor to admit it would defeat the floor's
+> purpose. See
 > [`tables/payload_fidelity_evaluation.md`](tables/payload_fidelity_evaluation.md).
 
 ---

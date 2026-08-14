@@ -2,6 +2,19 @@
 
 Generated: 2026-07-19T19:35:01.814489Z
 
+> [!NOTE]
+> Every figure below is checked against the interim parquets by
+> `tests/test_cleaning_report_current.py`, which re-derives the row
+> counts and missingness percentages and fails if they diverge. A
+> passing suite means this report is current regardless of its date.
+>
+> Verified 2026-08-10: 19 table row counts and every documented
+> missingness percentage reproduce exactly. The ID-collision repair
+> (`data_correction_notice.md` §3) restored `labevents`, `admissions`,
+> `chartevents` and `radiology_detail`, but it corrected identifier
+> *values* — not row counts or column missingness — so nothing this
+> report measures was affected by it.
+
 ## Summary
 
 > **Note on Duplicates:** The summary table (`dup_before`/`dup_after`) counts only the redundant extra copies (`keep='first'`), showing how many rows would be dropped to make the table unique. The Documented Actions table below (`flag_duplicates`) counts *all* rows involved in a duplicate group (`keep=False`), because all copies receive the `_is_duplicate` flag.
