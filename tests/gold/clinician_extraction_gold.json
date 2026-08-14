@@ -1,0 +1,102 @@
+{
+  "_meta": {
+    "name": "Clinician fact extraction gold set",
+    "version": "2026.08.1",
+    "task": "clinician free text -> structured payload fields",
+    "authored_by": "engineering (LLM-assisted)",
+    "review_status": "unreviewed",
+    "review_note": "Values are what the message literally states. A field extracted with a value absent from the message is a fabrication regardless of clinical plausibility, and is counted separately from a simple miss."
+  },
+  "cases": [
+    {
+      "message": "45 year old male with septic shock",
+      "expected": {
+        "age": 45,
+        "sex": "male",
+        "primary_diagnosis": "septic shock"
+      }
+    },
+    {
+      "message": "72yo F, DKA, glucose 480",
+      "expected": {
+        "age": 72,
+        "sex": "F",
+        "primary_diagnosis": "DKA",
+        "glucose_max": 480
+      }
+    },
+    {
+      "message": "creatinine 3.2, BUN 48, WBC 19.5",
+      "expected": {
+        "creatinine_max": 3.2,
+        "bun_max": 48,
+        "wbc_max": 19.5
+      }
+    },
+    {
+      "message": "HCO3 16, Na 132, K 5.1",
+      "expected": {
+        "bicarbonate_min": 16,
+        "sodium_min": 132,
+        "potassium_max": 5.1
+      }
+    },
+    {
+      "message": "plt 96, hct 29, glucose 180",
+      "expected": {
+        "platelets_min": 96,
+        "hematocrit_min": 29,
+        "glucose_max": 180
+      }
+    },
+    {
+      "message": "BP 82/40, HR 124, sats 91",
+      "expected": {
+        "sbp_min": 82,
+        "hr_max": 124,
+        "spo2_min": 91
+      }
+    },
+    {
+      "message": "Cr 1.1 and BUN 14",
+      "expected": {
+        "creatinine_max": 1.1,
+        "bun_max": 14
+      }
+    },
+    {
+      "message": "61M with acute kidney injury on vancomycin",
+      "expected": {
+        "age": 61,
+        "sex": "M",
+        "primary_diagnosis": "acute kidney injury",
+        "medication_name": "vancomycin"
+      }
+    },
+    {
+      "message": "patient has pneumonia",
+      "expected": {
+        "primary_diagnosis": "pneumonia"
+      }
+    },
+    {
+      "message": "temp 38.9 and RR 28",
+      "expected": {
+        "temperature_max": 38.9,
+        "rr_max": 28
+      }
+    },
+    {
+      "message": "what do you think?",
+      "expected": {}
+    },
+    {
+      "message": "please advise on next steps",
+      "expected": {}
+    },
+    {
+      "message": "I am not sure what to do",
+      "expected": {}
+    }
+  ]
+}

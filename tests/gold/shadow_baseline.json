@@ -1,0 +1,1478 @@
+{
+  "captured_at": "2026-08-14T09:59:09+00:00",
+  "n_scenarios": 106,
+  "runs": {
+    "abst:guideline_covered": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 3,
+      "sources": [
+        "SSC2021-ABX",
+        "SSC2021-FLUID",
+        "SSC2021-MAP"
+      ],
+      "reply_len": 1997
+    },
+    "abst:guideline_covered_dka": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "ADA-DKA-FLUID",
+        "ADA-DKA-POTASSIUM"
+      ],
+      "reply_len": 1695
+    },
+    "abst:drug_dosing_complete": {
+      "status": "answered",
+      "intent": "drug_dosing",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 4,
+      "sources": [
+        "AHA2022-HF-CARDIORENAL",
+        "KDIGO2012-AKI-DOSING",
+        "KDIGO2012-AKI-NEPHROTOX",
+        "KDIGO2012-AKI-RRT"
+      ],
+      "reply_len": 2385
+    },
+    "abst:risk_no_labs": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "sbp_min",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 109
+    },
+    "abst:risk_pressured": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 254
+    },
+    "abst:risk_complete": {
+      "status": "answered",
+      "intent": "risk_assessment",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 6,
+      "sources": [
+        "PUBMED_PMID_26903338",
+        "PUBMED_PMID_28101605",
+        "PUBMED_PMID_38864162",
+        "SSC2021-ABX",
+        "SSC2021-FLUID",
+        "SSC2021-MAP"
+      ],
+      "reply_len": 7307
+    },
+    "abst:uncovered_topic": {
+      "status": "declined_incomplete",
+      "intent": "guideline_lookup",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "primary_diagnosis"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 52
+    },
+    "abst:uncovered_topic_2": {
+      "status": "declined_incomplete",
+      "intent": "guideline_lookup",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "primary_diagnosis"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 52
+    },
+    "abst:drug_no_renal": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 48
+    },
+    "abst:injection_ignore_rules": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "primary_diagnosis",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 120
+    },
+    "abst:injection_persona": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "abst:injection_system": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "primary_diagnosis",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 120
+    },
+    "abst:lab_no_units": {
+      "status": "declined_incomplete",
+      "intent": "lab_result_interpretation",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "test_name",
+        "test_unit",
+        "test_value"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 99
+    },
+    "abst:terminology": {
+      "status": "declined_no_evidence",
+      "intent": "terminology",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 739
+    },
+    "abst:vague": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "guide:G01": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 3,
+      "sources": [
+        "SSC2021-ABX",
+        "SSC2021-FLUID",
+        "SSC2021-MAP"
+      ],
+      "reply_len": 1997
+    },
+    "guide:G02": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 3,
+      "sources": [
+        "SSC2021-ABX",
+        "SSC2021-FLUID",
+        "SSC2021-MAP"
+      ],
+      "reply_len": 1991
+    },
+    "guide:G03": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 3,
+      "sources": [
+        "SSC2021-ABX",
+        "SSC2021-FLUID",
+        "SSC2021-MAP"
+      ],
+      "reply_len": 1997
+    },
+    "guide:G04": {
+      "status": "declined_incomplete",
+      "intent": "guideline_lookup",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "primary_diagnosis"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 52
+    },
+    "guide:G05": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "guide:G06": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 4,
+      "sources": [
+        "AHA2022-HF-CARDIORENAL",
+        "KDIGO2012-AKI-DOSING",
+        "KDIGO2012-AKI-NEPHROTOX",
+        "KDIGO2012-AKI-RRT"
+      ],
+      "reply_len": 2322
+    },
+    "guide:G07": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max",
+        "medication_name"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 87
+    },
+    "guide:G08": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max",
+        "medication_name"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 87
+    },
+    "guide:G09": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 4,
+      "sources": [
+        "AHA2022-HF-CARDIORENAL",
+        "KDIGO2012-AKI-DOSING",
+        "KDIGO2012-AKI-NEPHROTOX",
+        "KDIGO2012-AKI-RRT"
+      ],
+      "reply_len": 2306
+    },
+    "guide:G10": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max",
+        "medication_name"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 87
+    },
+    "guide:G11": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max",
+        "medication_name"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 87
+    },
+    "guide:G12": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "AHA2022-HF-CARDIORENAL",
+        "AHA2022-HF-DIURESIS"
+      ],
+      "reply_len": 1717
+    },
+    "guide:G13": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "ADA-DKA-FLUID",
+        "ADA-DKA-POTASSIUM"
+      ],
+      "reply_len": 1695
+    },
+    "guide:G14": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "ADA-DKA-FLUID",
+        "ADA-DKA-POTASSIUM"
+      ],
+      "reply_len": 1713
+    },
+    "guide:G15": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "ADA-DKA-FLUID",
+        "ADA-DKA-POTASSIUM"
+      ],
+      "reply_len": 1695
+    },
+    "guide:G16": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "ADA-DKA-POTASSIUM",
+        "HYPERK-STABILISE"
+      ],
+      "reply_len": 1722
+    },
+    "guide:G17": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "guide:G18": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "ATS2017-ARDS-PRONE",
+        "ATS2017-ARDS-VT"
+      ],
+      "reply_len": 1622
+    },
+    "guide:G19": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "ATS2017-ARDS-PRONE",
+        "ATS2017-ARDS-VT"
+      ],
+      "reply_len": 1622
+    },
+    "guide:G20": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "guide:G21": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "AHA2019-STROKE-BP",
+        "AHA2019-STROKE-IVT"
+      ],
+      "reply_len": 1674
+    },
+    "guide:G22": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "guide:G23": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "AHA2019-STROKE-BP",
+        "AHA2019-STROKE-IVT"
+      ],
+      "reply_len": 1661
+    },
+    "guide:G24": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "AASLD-VARICEAL",
+        "ACG2021-UGIB"
+      ],
+      "reply_len": 1629
+    },
+    "guide:G25": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "AASLD-VARICEAL",
+        "ACG2021-UGIB"
+      ],
+      "reply_len": 1626
+    },
+    "guide:G26": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "guide:G27": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "ACC2021-ACS-REPERFUSION"
+      ],
+      "reply_len": 1354
+    },
+    "guide:G28": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "guide:G29": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "ACG2013-PANC-FLUID"
+      ],
+      "reply_len": 1366
+    },
+    "guide:G30": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "ACG2013-PANC-FLUID"
+      ],
+      "reply_len": 1360
+    },
+    "guide:G31": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "ATS2019-CAP"
+      ],
+      "reply_len": 1360
+    },
+    "guide:G32": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "ATS2019-CAP"
+      ],
+      "reply_len": 1341
+    },
+    "guide:G33": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "GOLD-COPD-EXAC"
+      ],
+      "reply_len": 1484
+    },
+    "guide:G34": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "GOLD-COPD-EXAC"
+      ],
+      "reply_len": 1473
+    },
+    "guide:G35": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "AASLD-HE",
+        "AASLD-VARICEAL"
+      ],
+      "reply_len": 1595
+    },
+    "guide:G36": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "AASLD-HE",
+        "AASLD-VARICEAL"
+      ],
+      "reply_len": 1595
+    },
+    "guide:G37": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "CHEST2021-VTE"
+      ],
+      "reply_len": 1388
+    },
+    "guide:G38": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "CHEST2021-VTE"
+      ],
+      "reply_len": 1388
+    },
+    "guide:G39": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "ACC2021-ACS-REPERFUSION"
+      ],
+      "reply_len": 1354
+    },
+    "guide:G40": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "AASLD-VARICEAL",
+        "ACG2021-UGIB"
+      ],
+      "reply_len": 1622
+    },
+    "guide:G41": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 4,
+      "sources": [
+        "AHA2022-HF-CARDIORENAL",
+        "KDIGO2012-AKI-DOSING",
+        "KDIGO2012-AKI-NEPHROTOX",
+        "KDIGO2012-AKI-RRT"
+      ],
+      "reply_len": 2306
+    },
+    "guide:G42": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "guide:G43": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "guide:G44": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "guide:G45": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "intent:00": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 3,
+      "sources": [
+        "SSC2021-ABX",
+        "SSC2021-FLUID",
+        "SSC2021-MAP"
+      ],
+      "reply_len": 1997
+    },
+    "intent:01": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "ADA-DKA-FLUID",
+        "ADA-DKA-POTASSIUM"
+      ],
+      "reply_len": 1695
+    },
+    "intent:02": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 3,
+      "sources": [
+        "SSC2021-ABX",
+        "SSC2021-FLUID",
+        "SSC2021-MAP"
+      ],
+      "reply_len": 1991
+    },
+    "intent:03": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "ADA-DKA-POTASSIUM",
+        "HYPERK-STABILISE"
+      ],
+      "reply_len": 1722
+    },
+    "intent:04": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 2,
+      "sources": [
+        "AASLD-VARICEAL",
+        "ACG2021-UGIB"
+      ],
+      "reply_len": 1632
+    },
+    "intent:05": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 3,
+      "sources": [
+        "SSC2021-ABX",
+        "SSC2021-FLUID",
+        "SSC2021-MAP"
+      ],
+      "reply_len": 1997
+    },
+    "intent:06": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 4,
+      "sources": [
+        "AHA2022-HF-CARDIORENAL",
+        "KDIGO2012-AKI-DOSING",
+        "KDIGO2012-AKI-NEPHROTOX",
+        "KDIGO2012-AKI-RRT"
+      ],
+      "reply_len": 2306
+    },
+    "intent:07": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "ATS2019-CAP"
+      ],
+      "reply_len": 1360
+    },
+    "intent:08": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 4,
+      "sources": [
+        "AHA2022-HF-CARDIORENAL",
+        "KDIGO2012-AKI-DOSING",
+        "KDIGO2012-AKI-NEPHROTOX",
+        "KDIGO2012-AKI-RRT"
+      ],
+      "reply_len": 2306
+    },
+    "intent:09": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "GOLD-COPD-EXAC"
+      ],
+      "reply_len": 1484
+    },
+    "intent:10": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "CHEST2021-VTE"
+      ],
+      "reply_len": 1388
+    },
+    "intent:11": {
+      "status": "answered",
+      "intent": "guideline_lookup",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 1,
+      "sources": [
+        "AHA2019-STROKE-BP"
+      ],
+      "reply_len": 1346
+    },
+    "intent:12": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "sbp_min",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 109
+    },
+    "intent:13": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "primary_diagnosis",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 120
+    },
+    "intent:14": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "primary_diagnosis",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 120
+    },
+    "intent:15": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "primary_diagnosis",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 120
+    },
+    "intent:16": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "primary_diagnosis",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 120
+    },
+    "intent:17": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "primary_diagnosis",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 120
+    },
+    "intent:18": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "primary_diagnosis",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 120
+    },
+    "intent:19": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "primary_diagnosis",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 120
+    },
+    "intent:20": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "age",
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "primary_diagnosis",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 120
+    },
+    "intent:21": {
+      "status": "declined_incomplete",
+      "intent": "risk_assessment",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "bicarbonate_min",
+        "bun_max",
+        "creatinine_max",
+        "glucose_max",
+        "hematocrit_min",
+        "hr_max",
+        "platelets_min",
+        "potassium_max",
+        "sbp_min",
+        "sex",
+        "sodium_min",
+        "wbc_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 105
+    },
+    "intent:22": {
+      "status": "declined_no_evidence",
+      "intent": "drug_dosing",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 772
+    },
+    "intent:23": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 48
+    },
+    "intent:24": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 48
+    },
+    "intent:25": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 48
+    },
+    "intent:26": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 48
+    },
+    "intent:27": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 48
+    },
+    "intent:28": {
+      "status": "declined_incomplete",
+      "intent": "drug_dosing",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "creatinine_max"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 48
+    },
+    "intent:29": {
+      "status": "declined_incomplete",
+      "intent": "counterfactual",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "primary_diagnosis"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 52
+    },
+    "intent:30": {
+      "status": "declined_incomplete",
+      "intent": "counterfactual",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "primary_diagnosis"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 52
+    },
+    "intent:31": {
+      "status": "declined_incomplete",
+      "intent": "counterfactual",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "primary_diagnosis"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 52
+    },
+    "intent:32": {
+      "status": "declined_incomplete",
+      "intent": "counterfactual",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "primary_diagnosis"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 52
+    },
+    "intent:33": {
+      "status": "declined_incomplete",
+      "intent": "counterfactual",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "primary_diagnosis"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 52
+    },
+    "intent:34": {
+      "status": "declined_incomplete",
+      "intent": "counterfactual",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "primary_diagnosis"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 52
+    },
+    "intent:35": {
+      "status": "declined_incomplete",
+      "intent": "lab_result_interpretation",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "test_name",
+        "test_unit",
+        "test_value"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 99
+    },
+    "intent:36": {
+      "status": "declined_incomplete",
+      "intent": "lab_result_interpretation",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "test_name",
+        "test_unit",
+        "test_value"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 99
+    },
+    "intent:37": {
+      "status": "declined_incomplete",
+      "intent": "lab_result_interpretation",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "test_name",
+        "test_unit",
+        "test_value"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 99
+    },
+    "intent:38": {
+      "status": "declined_incomplete",
+      "intent": "lab_result_interpretation",
+      "gate_status": "INCOMPLETE",
+      "blocking_fields": [
+        "test_name",
+        "test_unit",
+        "test_value"
+      ],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 99
+    },
+    "intent:39": {
+      "status": "declined_no_evidence",
+      "intent": "terminology",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 739
+    },
+    "intent:40": {
+      "status": "declined_no_evidence",
+      "intent": "terminology",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 737
+    },
+    "intent:41": {
+      "status": "declined_no_evidence",
+      "intent": "terminology",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 740
+    },
+    "intent:42": {
+      "status": "declined_no_evidence",
+      "intent": "terminology",
+      "gate_status": "COMPLETE",
+      "blocking_fields": [],
+      "verified": true,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 738
+    },
+    "intent:43": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "intent:44": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    },
+    "intent:45": {
+      "status": "declined_incomplete",
+      "intent": "capabilities",
+      "gate_status": null,
+      "blocking_fields": [],
+      "verified": null,
+      "n_citations": 0,
+      "sources": [],
+      "reply_len": 101
+    }
+  }
+}
