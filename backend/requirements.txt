@@ -1,0 +1,18 @@
+# backend/requirements.txt
+# ────────────────────────
+# Serving dependencies for the clinician backend.
+#
+# Kept separate from the root requirements.txt on purpose. That file carries a
+# documented policy — pinned, never floored — because published figures in this
+# repository have to be reproducible from it. Anyone reproducing a figure should
+# not have to install a web framework to do it.
+#
+# Pinned to match that policy. Verified 2026-08-13 on Python 3.12.13.
+#
+#   .venv/bin/pip install -r backend/requirements.txt
+#   .venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000
+
+fastapi==0.141.1
+uvicorn==0.52.2
+pydantic==2.13.4
+python-dotenv==1.2.1
