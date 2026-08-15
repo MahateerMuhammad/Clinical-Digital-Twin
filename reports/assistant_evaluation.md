@@ -1,6 +1,6 @@
 # Clinician Assistant — Evaluation Report
 
-*Generated 2026-08-14 by `scripts/evaluation/run_assistant_eval.py`.*
+*Generated 2026-08-15 by `scripts/evaluation/run_assistant_eval.py`.*
 
 Every gold set below was authored by the same engineering effort that wrote the code. These numbers measure **internal consistency and regression safety**, not clinical correctness: a correctly-retrieved guideline that does not apply to the patient passes every check here.
 
@@ -11,7 +11,7 @@ Concept-anchored lexical retrieval over the curated guideline corpus. `normalise
 - Queries: **45**
 - MRR: **1.000**
 - Context recall (unbounded): **100.0%**
-- Median retrieval latency: **0.02 ms**
+- Median retrieval latency: **0.01 ms**
 
 | k | Precision@k | Recall@k | nDCG@k | Hit rate@k | Context precision@k |
 | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -58,4 +58,16 @@ Backend: **deterministic**
 - Carrying at least one citation: **100.0%**
 
 *Computed over answered turns only. Including refusals would let a system that never answers score 100%.*
+
+## 6. Model calibration
+
+Held-out test split, 4000 rows. **Served** is the isotonic-calibrated probability the runner actually returns; **raw** is the bare booster output, shown so the calibrator's contribution is visible.
+
+| Task | n | Base rate | Served mean | Served Brier | Served ECE | Raw Brier | Raw ECE |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `mortality` | 4000 | 2.12% | 1.97% | 0.0161 | 0.0018 | 0.0697 | 0.1319 |
+| `icu_admission` | 4000 | 15.45% | 14.02% | 0.0800 | 0.0215 | 0.1131 | 0.1490 |
+| `readmission` | 4000 | 19.53% | 15.34% | 0.1563 | 0.0428 | 0.1984 | 0.2054 |
+
+*AUROC says the ranking is right; ECE says the number means what it says. Both matter, and only the first was measured before this report.*
 

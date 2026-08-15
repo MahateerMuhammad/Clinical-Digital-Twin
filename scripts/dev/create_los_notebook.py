@@ -23,8 +23,36 @@ _os.chdir(_ROOT)
 import json
 from pathlib import Path
 
+# Emitted as the first cell. This notebook *trains* — unlike notebook 09, which only
+# renders reports — so its stored outputs come from one particular run and will drift
+# from the promoted models as soon as those are retrained. Notebook 11 published
+# superseded figures for weeks because nothing in it said which run produced them;
+# stating it costs one cell and removes the ambiguity at the point of reading.
+PROVENANCE = [
+    "> **Provenance — read before quoting any number below.**\n",
+    ">\n",
+    "> This notebook **trains models from scratch**. The outputs stored in it are from\n",
+    "> one historical execution and are *not* automatically the served models'\n",
+    "> figures. Metrics here can legitimately differ from the report: they come from a\n",
+    "> fresh fit, not from the promoted artifact.\n",
+    ">\n",
+    "> The authoritative figures are\n",
+    "> [`reports/phase4_los_two_stage_report.md`](../reports/phase4_los_two_stage_report.md),\n",
+    "> which describes `models/best_models/phase4_*`.\n",
+    ">\n",
+    "> Re-executing writes to `models/`, **not** to `models/best_models/`. Nothing\n",
+    "> served changes until `scripts/maintenance/promote_models.py` runs, and a retrain\n",
+    "> additionally invalidates the Phase 9 tier cutoffs — see\n",
+    "> `reports/data_correction_notice.md` §7.\n",
+]
+
 notebook_content = {
     "cells": [
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": PROVENANCE,
+        },
         {
             "cell_type": "markdown",
             "metadata": {},

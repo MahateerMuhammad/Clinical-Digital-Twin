@@ -329,6 +329,16 @@ class EDAAnalyzer:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write("# Exploratory Data Analysis Report\n\n")
             fh.write(f"Generated: {datetime.utcnow().isoformat()}Z\n\n")
+            # Said plainly because the filename promises more than the file delivers.
+            # This is an index of what was plotted, not a findings document — it states
+            # no statistic and draws no conclusion, so there is nothing in it that can
+            # go stale except the figures it points at.
+            fh.write(
+                "> [!NOTE]\n"
+                "> **This is an index, not an analysis.** It lists the figures the EDA\n"
+                "> stage produced and states no statistics or conclusions of its own.\n"
+                "> Findings live in the per-phase reports; dataset-level numbers live in\n"
+                "> `cleaning_report.md` and `data_dictionary.md`.\n\n")
             fh.write(f"Total figures created: {len(self.figures_created)}\n\n")
             fh.write("## Figures\n\n")
             for fig in self.figures_created:

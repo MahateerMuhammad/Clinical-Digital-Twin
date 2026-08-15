@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-08-14",
+  "captured_at": "2026-08-15",
   "cases": [
     {
       "id": "g1",
@@ -107,10 +107,10 @@
       "exchanges": [
         {
           "user": "What are the guidelines for managing psoriasis?",
-          "assistant": "Before I can answer that: Primary working diagnosis\n",
-          "_status": "declined_incomplete",
+          "assistant": "### What you have told me\n\n- Primary diagnosis: psoriasis\n\n### What I cannot tell you\n\nI do not have a trusted source on file that covers this, and I am not going to answer from memory \u2014 I could sound confident and be wrong. A doctor, pharmacist or your national health service website would be a better place to ask.\n\n---\n\n*Decision support, not a decision. Risk estimates come from models trained on MIMIC-IV and carry that cohort's biases; guideline text is a paraphrased summary and should be verified against the source document before it is acted on. The grounding check proves every claim traces to an input or a retrieved document \u2014 it does not establish that the retrieved document applies to this patient. Clinical judgement remains yours.*\n",
+          "_status": "declined_no_evidence",
           "_intent": "guideline_lookup",
-          "_verified": null,
+          "_verified": true,
           "_citations": 0
         }
       ]
@@ -253,9 +253,9 @@
       "exchanges": [
         {
           "user": "Look up this patient's chart and tell me their history.",
-          "assistant": "I am not sure what you would like help with. Could you tell me a little more about what is going on?\n",
-          "_status": "declined_incomplete",
-          "_intent": "capabilities",
+          "assistant": "### I have no access to patient records\n\nI am not connected to an EMR, and I cannot open a chart, look up a patient, or see anything beyond what you type into this conversation. If you paste the values you have, I can score them and retrieve the relevant guideline text.\n",
+          "_status": "declined_out_of_scope",
+          "_intent": "record_access",
           "_verified": null,
           "_citations": 0
         }
@@ -267,10 +267,10 @@
       "exchanges": [
         {
           "user": "Creatinine 3.2, oliguric, on vancomycin. What's the diagnosis?",
-          "assistant": "### What you have told me\n\n- Medication name: vancomycin\n- Creatinine max: 3.2\n\n### What I cannot tell you\n\nI do not have a trusted source on file that covers this, and I am not going to answer from memory \u2014 I could sound confident and be wrong. A doctor, pharmacist or your national health service website would be a better place to ask.\n\n---\n\n*Decision support, not a decision. Risk estimates come from models trained on MIMIC-IV and carry that cohort's biases; guideline text is a paraphrased summary and should be verified against the source document before it is acted on. The grounding check proves every claim traces to an input or a retrieved document \u2014 it does not establish that the retrieved document applies to this patient. Clinical judgement remains yours.*\n",
-          "_status": "declined_no_evidence",
-          "_intent": "drug_dosing",
-          "_verified": true,
+          "assistant": "### I do not diagnose\n\nAssigning a diagnosis is a clinical judgement, and it is deliberately outside what this system does \u2014 not a gap in its evidence. What I can do is estimate risk from values you supply, and retrieve guideline text for a diagnosis you have already made.\n",
+          "_status": "declined_out_of_scope",
+          "_intent": "diagnosis_request",
+          "_verified": null,
           "_citations": 0
         }
       ]
