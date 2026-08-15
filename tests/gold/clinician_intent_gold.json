@@ -1,0 +1,196 @@
+{
+  "_meta": {
+    "name": "Clinician intent classification gold set",
+    "version": "2026.08.1",
+    "task": "clinician message -> expected Intent",
+    "authored_by": "engineering (LLM-assisted)",
+    "review_status": "unreviewed",
+    "review_note": "Labels encode the routing decision this system makes, not a clinical judgement. The consequential label is risk_assessment: it is the only one that reaches the models, so a false positive puts a case in front of a gate it cannot pass and a false negative silently answers from evidence alone."
+  },
+  "cases": [
+    {
+      "message": "What is the first-line vasopressor in septic shock?",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "How should I manage DKA?",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "What does the Surviving Sepsis Campaign recommend for fluids?",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "Management of hyperkalaemia?",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "Approach to upper GI bleed",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "What is the target MAP in septic shock?",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "KDIGO guidance on AKI staging",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "standard of care for community acquired pneumonia",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "Is early RRT indicated in AKI?",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "What does GOLD recommend for COPD exacerbation?",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "recommendation for anticoagulation in pulmonary embolism",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "first-line treatment for hypertensive emergency",
+      "intent": "guideline_lookup"
+    },
+    {
+      "message": "45M septic shock, what is his mortality risk?",
+      "intent": "risk_assessment"
+    },
+    {
+      "message": "What is her risk of ICU admission?",
+      "intent": "risk_assessment"
+    },
+    {
+      "message": "score this patient",
+      "intent": "risk_assessment"
+    },
+    {
+      "message": "how likely is he to deteriorate in the next 48 hours?",
+      "intent": "risk_assessment"
+    },
+    {
+      "message": "what is the readmission risk for this admission?",
+      "intent": "risk_assessment"
+    },
+    {
+      "message": "run the model on this presentation",
+      "intent": "risk_assessment"
+    },
+    {
+      "message": "what are his odds of dying in hospital?",
+      "intent": "risk_assessment"
+    },
+    {
+      "message": "predicted length of stay?",
+      "intent": "risk_assessment"
+    },
+    {
+      "message": "what is the mortality prediction here",
+      "intent": "risk_assessment"
+    },
+    {
+      "message": "risk assessment for a 62 year old with pneumonia",
+      "intent": "risk_assessment"
+    },
+    {
+      "message": "should I be worried about vancomycin with a creatinine of 3.2?",
+      "intent": "drug_dosing"
+    },
+    {
+      "message": "does enoxaparin need renal dose adjustment here?",
+      "intent": "drug_dosing"
+    },
+    {
+      "message": "is it safe to continue cefepime with AKI?",
+      "intent": "drug_dosing"
+    },
+    {
+      "message": "gentamicin trough in renal impairment",
+      "intent": "drug_dosing"
+    },
+    {
+      "message": "should I hold the heparin?",
+      "intent": "drug_dosing"
+    },
+    {
+      "message": "meropenem dosing in CRRT",
+      "intent": "drug_dosing"
+    },
+    {
+      "message": "nephrotoxic risk of vancomycin plus piperacillin",
+      "intent": "drug_dosing"
+    },
+    {
+      "message": "what if the creatinine were 1.5?",
+      "intent": "counterfactual"
+    },
+    {
+      "message": "how much would the risk change if lactate fell to 2?",
+      "intent": "counterfactual"
+    },
+    {
+      "message": "what if his bicarbonate improved to 22?",
+      "intent": "counterfactual"
+    },
+    {
+      "message": "would it change if the platelets were normal?",
+      "intent": "counterfactual"
+    },
+    {
+      "message": "what if potassium came down to 4.0?",
+      "intent": "counterfactual"
+    },
+    {
+      "message": "sensitivity to the sodium value",
+      "intent": "counterfactual"
+    },
+    {
+      "message": "haemoglobin 9.1 g/dL, reference 13-17, what does that mean?",
+      "intent": "lab_result_interpretation"
+    },
+    {
+      "message": "his lactate came back at 6.1 mmol/L",
+      "intent": "lab_result_interpretation"
+    },
+    {
+      "message": "interpret a bicarbonate of 12 mEq/L",
+      "intent": "lab_result_interpretation"
+    },
+    {
+      "message": "ferritin is 15 ng/mL with a range of 30-400",
+      "intent": "lab_result_interpretation"
+    },
+    {
+      "message": "what does idiopathic mean?",
+      "intent": "terminology"
+    },
+    {
+      "message": "define oliguria",
+      "intent": "terminology"
+    },
+    {
+      "message": "what is the meaning of nephrotoxic?",
+      "intent": "terminology"
+    },
+    {
+      "message": "explain the term anion gap",
+      "intent": "terminology"
+    },
+    {
+      "message": "what can you help with?",
+      "intent": "capabilities"
+    },
+    {
+      "message": "hello",
+      "intent": "capabilities"
+    },
+    {
+      "message": "who are you?",
+      "intent": "capabilities"
+    }
+  ]
+}

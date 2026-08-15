@@ -33,8 +33,14 @@ served from payloads only if retention clears ``PAYLOAD_RETENTION_FLOOR``.
 Why retention and not absolute AUROC: the report presents each figure as coming
 from a specific validated model, so the honest test is how far the served input
 falls short of the input that validation was done on. It is also the more stable
-criterion — bootstrapped, deterioration's retention CI sits entirely below the
-floor while its absolute AUROC CI straddles any threshold near 0.70.
+criterion: an absolute-AUROC threshold near 0.70 would have decided deterioration on
+a CI that straddles it, while retention places that task clearly on one side.
+
+Which side has changed. Deterioration's retention CI once sat entirely *below* the
+floor; after the payload path began supplying categoricals and prior utilisation it
+sits above. That is the point of recomputing rather than quoting: the served set is
+a measurement, and this docstring is not the place to record its current value —
+`reports/tables/payload_fidelity_evaluation.md` is.
 
 Usage
 ─────
@@ -151,11 +157,22 @@ def payload_frame(runner: LiveModelRunner, d: pd.DataFrame) -> pd.DataFrame:
     the rest, which is what ``_convert_payload_to_series`` does with the single
     value a payload carries. Absent analytes take ``LAB_DEFAULTS``, again matching
     production. Anything outside this frame is a feature a payload cannot supply.
+
+    The field lists are read from ``runner`` rather than restated here. This function
+    is a vectorised mirror of the production converter, and a mirror that keeps its
+    own copy of the schema stops being one: it previously hard-coded ``gender_M`` and
+    the lab map, so the day production learned to send race, insurance and prior
+    utilisation, the harness would have gone on measuring the old payload and
+    reported no improvement from a change that had already landed.
     """
     sup = {
         "anchor_age": pd.to_numeric(d["anchor_age"], errors="coerce").fillna(65.0),
-        "gender_M": (d["gender"].astype(str).str.upper() == "M").astype(float),
     }
+    for column in runner.PAYLOAD_NUMERICS.values():
+        if column == "anchor_age":
+            continue
+        sup[column] = (pd.to_numeric(d[column], errors="coerce")
+                       if column in d.columns else pd.Series(np.nan, index=d.index))
     for field, columns in runner.PAYLOAD_LAB_FEATURES.items():
         source = columns[0]
         value = (pd.to_numeric(d[source], errors="coerce") if source in d.columns
@@ -166,7 +183,16 @@ def payload_frame(runner: LiveModelRunner, d: pd.DataFrame) -> pd.DataFrame:
     for col in runner.MED_KEYWORDS:
         sup[col] = (pd.to_numeric(d[col], errors="coerce").fillna(0.0)
                     if col in d.columns else pd.Series(0.0, index=d.index))
-    return pd.DataFrame(sup, index=d.index)
+
+    frame = pd.DataFrame(sup, index=d.index)
+    # Source categoricals are copied across with their dtype intact, so the cohort's
+    # full level set survives and `encode_admission_frame` emits every dummy — the
+    # zeros included. Coercing them to str here would leave only the observed level
+    # and reintroduce the gap this harness exists to measure.
+    for column in runner.PAYLOAD_CATEGORICALS.values():
+        if column in d.columns:
+            frame[column] = d[column]
+    return encode_admission_frame(frame, drop_outcomes=False)
 
 
 def bootstrap_retention(y, p_ref, p_pay, rounds, seed):
@@ -272,16 +298,25 @@ def write_report(rows: list[dict], n: int, seed: int, rounds: int) -> None:
         "## Reading the table",
         "",
         "- **Spearman ρ** is the rank correlation between the payload prediction and the",
-        "  same model's full-record prediction on the same patient. It is the sharpest",
-        "  statement of the problem: for ICU admission it is near zero, so the payload",
-        "  figure is not a degraded version of the validated prediction — it is",
-        "  unrelated to it.",
-        "- A retention **below zero** means the payload prediction is anti-correlated",
-        "  with the outcome; the model, denied the features it relies on, ranks patients",
-        "  backwards.",
+        "  same model's full-record prediction on the same patient. A ρ near zero means",
+        "  the payload figure is not a degraded version of the validated prediction but",
+        "  an unrelated one; a high ρ means the same patients are ranked the same way.",
+        # Written from the measurement rather than asserted. The previous version named
+        # ICU admission as the near-zero case and stayed in the report after ICU rose to
+        # +0.79 — the table and the paragraph explaining it disagreed, and the paragraph
+        # is what a reader trusts.
+        f"  Here ρ ranges {min(r['spearman'] for r in rows):+.2f} to "
+        f"{max(r['spearman'] for r in rows):+.2f}"
+        + (f", lowest for {min(rows, key=lambda r: r['spearman'])['task']}." if rows else "."),
+        "- A retention **below zero** would mean the payload prediction is anti-correlated",
+        "  with the outcome — the model, denied the features it relies on, ranking",
+        "  patients backwards. "
+        + (f"{sum(1 for r in rows if retention(r) < 0)} task(s) do so here."
+           if any(retention(r) < 0 for r in rows) else "No task does so here."),
         "- **Payload coverage** is the share of trained features a payload populates.",
-        "  It is low for every task and is *not* the gate — coverage says how much input",
-        "  is missing, retention says whether what remains still discriminates.",
+        "  It is *not* the gate — coverage says how much input is missing, retention says",
+        "  whether what remains still discriminates. The two move together but not",
+        "  reliably: a payload can cover little and retain much, or the reverse.",
         "",
         "## Consequence",
         "",

@@ -129,6 +129,32 @@ PHENOTYPES: List[Dict[str, Any]] = [
 ]
 
 
+#: Administrative context every phenotype carries. These are not clinical variables
+#: and they are not what this benchmark varies — they are held fixed precisely so
+#: they do not confound the phenotype comparison. They are present because a payload
+#: assembled at a real bedside would have them, and omitting them understated
+#: coverage: these fields are the one-hot families, so leaving them out costs 86 of
+#: the mortality model's 164 features and made the benchmark measure a payload nobody
+#: would actually send.
+ADMIN_CONTEXT: Dict[str, Any] = {
+    "race": "WHITE",
+    "language": "English",
+    "insurance": "Medicare",
+    "marital_status": "MARRIED",
+}
+ADMISSION_CONTEXT: Dict[str, Any] = {
+    "admission_type": "EW EMER.",
+    "admission_location": "EMERGENCY ROOM",
+}
+#: A patient with no prior inpatient history — the conservative choice. Zeros here are
+#: genuine measurements ("no admissions in the past year"), not filled blanks, and
+#: they are what an unseen patient presenting fresh to the ED actually has.
+PRIOR_UTILISATION: Dict[str, Any] = {
+    "admissions_30d": 0, "admissions_90d": 0,
+    "admissions_365d": 0, "cumulative_los_days": 0.0,
+}
+
+
 def build_payload(spec: Dict[str, Any], age: int, sex: str) -> Dict[str, Any]:
     labs = dict(NORMAL)
     labs.update(spec["labs"])
@@ -136,7 +162,9 @@ def build_payload(spec: Dict[str, Any], age: int, sex: str) -> Dict[str, Any]:
     vitals.update(spec.get("vitals", {}))
     return {
         "primary_diagnosis": spec["diagnosis"],
-        "demographics": {"age": float(age), "gender": sex},
+        "demographics": {"age": float(age), "gender": sex, **ADMIN_CONTEXT},
+        "admission_context": dict(ADMISSION_CONTEXT),
+        "prior_utilisation": dict(PRIOR_UTILISATION),
         "presentation_labs": labs,
         "vital_signs": vitals,
         "active_medications": list(spec.get("meds", [])),
@@ -315,15 +343,23 @@ clinician would expect to correct — and report the mean change in predicted mo
 ## 4. The limitation that defines this phase
 
 **A payload populates {cov_mean:.1%} of the mortality model's features.** The
-remaining {1 - cov_mean:.1%} are zero-filled: `diagnosis_count`, `procedure_count`,
-the admission-type and admission-location dummies, and the per-analyte draw counts
-and missing-ratios. None of them can be derived from a payload, because they describe
-an admission that has not happened yet.
+remaining {1 - cov_mean:.1%} reach the booster as NaN — its native missing value, the
+one it was fitted with — not as zeros. Chiefly `diagnosis_count`, `procedure_count`
+and the per-analyte draw counts and missing-ratios: none can be derived from a
+payload, because they describe an admission that has not happened yet.
 
-This is not a defect to be fixed — it is what predicting for an unseen patient means.
-But it has two consequences that must travel with any Phase 11 output:
+The admission-type and admission-location dummies were listed here too, until
+2026-08-10. They were never unsuppliable; the schema simply did not ask for them.
+Asking, along with race, language, insurance, marital status and prior utilisation,
+roughly tripled this figure and took ICU admission, readmission and deterioration
+over the payload-serving floor. The remaining gap is the part that genuinely cannot
+be closed — worth stating precisely, because "unsuppliable" was doing work here that
+"not yet requested" should have been doing.
 
-* `diagnosis_count` is consistently the largest SHAP driver, at a zero-filled value.
+This residue is not a defect to be fixed — it is what predicting for an unseen
+patient means. But it has two consequences that must travel with any Phase 11 output:
+
+* `diagnosis_count` is consistently the largest SHAP driver, at a missing value.
   The model is partly responding to the *absence* of admission history rather than to
   the physiology supplied.
 * Absolute probabilities from a payload are not comparable with those from a cohort
