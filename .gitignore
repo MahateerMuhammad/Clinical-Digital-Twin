@@ -83,3 +83,11 @@ src.zip
 .env
 .env.*
 !.env.example
+
+# frontend
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+# `*.html` above is aimed at generated report output; the app's entry point is
+# source, and without this exception the frontend does not build from a clone.
+!frontend/index.html

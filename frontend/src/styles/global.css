@@ -1,0 +1,71 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--n-25);
+  color: var(--n-700);
+  font-family: var(--font-body);
+  font-size: var(--t-md);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--n-900);
+  font-family: var(--font-heading);
+  font-weight: var(--w-heading);
+  line-height: var(--lh-tight);
+  text-wrap: balance;
+}
+
+/* Every number that can change is monospaced and tabular, so a value updating
+ * in place does not shift the text around it. */
+code,
+kbd,
+samp,
+.num {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  font-variant-numeric: tabular-nums;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 2px;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* One focus treatment, applied once. Visible on keyboard only — a persistent
+ * ring on click makes a calm interface look permanently in error. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r);
+}
+
+::selection {
+  background: var(--accent-weak);
+}
