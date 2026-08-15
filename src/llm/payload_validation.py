@@ -60,6 +60,38 @@ RECOMMENDED_FIELDS: Tuple[FieldSpec, ...] = (
     FieldSpec("vital_signs.temperature_max", "Peak temperature", "degC", required=False),
     FieldSpec("comorbidities", "Known comorbidities", required=False),
     FieldSpec("active_medications", "Active medication list", required=False),
+
+    # Administrative and historical context. Recommended rather than required: these
+    # are cheap for a clinician and free from a FHIR pull, but promoting any of them
+    # to required would make every payload written before today refuse, and the
+    # completeness gate is the guardrail the whole design leans on.
+    #
+    # They are here because the boosters were fitted on them and the payload path
+    # never asked. Of the mortality model's 164 features, 86 are the one-hot
+    # expansions of race, language, insurance, marital status and admission
+    # type/location alone — supplying six values determines more than half the
+    # feature space, which no additional laboratory value comes close to matching.
+    FieldSpec("demographics.race", "Recorded race/ethnicity", required=False),
+    FieldSpec("demographics.language", "Primary language", required=False),
+    FieldSpec("demographics.insurance", "Insurance type", required=False),
+    FieldSpec("demographics.marital_status", "Marital status", required=False),
+    FieldSpec("admission_context.admission_type",
+              "Admission type (e.g. EW EMER., ELECTIVE, URGENT)", required=False),
+    FieldSpec("admission_context.admission_location",
+              "Admission source (e.g. EMERGENCY ROOM, PHYSICIAN REFERRAL)",
+              required=False),
+
+    # Expansion A&D. Phase 2 is built on prior utilisation, so a payload without it
+    # asks the readmission model to predict readmission with the patient's own
+    # readmission history withheld.
+    FieldSpec("prior_utilisation.admissions_30d",
+              "Admissions in the past 30 days", "count", required=False),
+    FieldSpec("prior_utilisation.admissions_90d",
+              "Admissions in the past 90 days", "count", required=False),
+    FieldSpec("prior_utilisation.admissions_365d",
+              "Admissions in the past 365 days", "count", required=False),
+    FieldSpec("prior_utilisation.cumulative_los_days",
+              "Total prior inpatient days", "days", required=False),
 )
 
 # (low, high) physiologically survivable bounds — outside ⇒ reject as implausible.

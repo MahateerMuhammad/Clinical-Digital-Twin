@@ -1,0 +1,113 @@
+# src/assistant/config/capabilities_clinician.yaml
+# ────────────────────────────────────────────────
+# Opening message and disclaimers for the CLINICIAN audience.
+#
+# The patient file hedges, softens and avoids the word diagnosis. This one does
+# not: the reader is qualified to interpret a probability, and hedging at them
+# hides the very numbers they need. What stays identical is the honesty about
+# what the system cannot do — a clinician is entitled to know that the corpus is
+# unreviewed and that one model is withheld, and is far more likely than a
+# patient to act on the answer.
+
+version: "2026.08.1"
+
+greeting: >-
+  Decision-support over MIMIC-IV-trained risk models and a curated guideline
+  corpus. I will not produce a risk estimate until the payload is complete, and
+  I will name exactly which fields are missing. Every clinical claim is quoted
+  to a retrieved document; anything I cannot source, I withhold.
+
+capabilities:
+  - intent: risk_assessment
+    label: Multi-task risk estimation
+    detail: >-
+      In-hospital mortality, ICU admission, 30-day readmission and 48-hour
+      deterioration, with calibration and uncertainty. Requires the full
+      presentation payload. Length of stay is withheld — see limitations.
+
+  - intent: guideline_lookup
+    label: Guideline retrieval
+    detail: >-
+      Society recommendations with citation and strength of evidence, from the
+      offline corpus. Sepsis, AKI, ARDS, DKA, hyperkalaemia, GI bleed, liver
+      failure, stroke, heart failure, pneumonia, COPD, PE, pancreatitis, MI and
+      hypertensive emergency.
+
+  - intent: drug_dosing
+    label: Drug and renal-dosing considerations
+    detail: >-
+      Retrieved dosing guidance in the context of recorded renal function. I
+      quote the source; I do not compute a dose.
+
+  - intent: counterfactual
+    label: Counterfactual simulation
+    detail: >-
+      How the model's output moves when an input changes. This describes model
+      behaviour, not causation.
+
+  - intent: lab_result_interpretation
+    label: Laboratory interpretation
+    detail: Values in context, against the reference range you supply.
+
+  - intent: terminology
+    label: Terminology
+    detail: Definitions from the retrieved corpus.
+
+closing_question: What would you like to work through?
+
+# Closing prose for a composed answer. The patient file's defaults address the
+# person being treated ("I cannot examine you"); addressed to a clinician those
+# lines read as the system having misjudged its audience, which undermines the
+# parts of the message that matter.
+prose:
+  next_steps_title: Applying this
+  next_steps: >-
+    Verify the retrieved text against the source document before acting on it.
+    The corpus is a paraphrased summary and has not been clinician-reviewed.
+  unknown_field: "Not supplied: {field}."
+  standing_limitations:
+    - >-
+      Retrieved guidance is general to the condition. Whether it applies to this
+      patient is a clinical judgement this system does not make.
+    - >-
+      The grounding check confirms every claim traces to a supplied value or a
+      retrieved document. It does not confirm the document is the right one.
+
+# Boundary refusals. These are statements of what the system is, so they live in
+# configuration rather than in code or in a model's discretion — a boundary that
+# can be rephrased per turn is not a boundary.
+#
+# Both replaced a refusal that was safe but untrue about its reason. An
+# independent judge scored the old replies routing 0: "I am not sure what you
+# would like help with" reads as the assistant being slow, and "no trusted
+# source on file" implies the right source would unlock a diagnosis.
+boundaries:
+  record_access:
+    title: I have no access to patient records
+    body: >-
+      I am not connected to an EMR, and I cannot open a chart, look up a
+      patient, or see anything beyond what you type into this conversation.
+      If you paste the values you have, I can score them and retrieve the
+      relevant guideline text.
+  diagnosis_request:
+    title: I do not diagnose
+    body: >-
+      Assigning a diagnosis is a clinical judgement, and it is deliberately
+      outside what this system does — not a gap in its evidence. What I can do
+      is estimate risk from values you supply, and retrieve guideline text for
+      a diagnosis you have already made.
+
+# Shown with every substantive answer.
+disclaimer: >-
+  Decision support, not a decision. Risk estimates come from models trained on
+  MIMIC-IV and carry that cohort's biases; guideline text is a paraphrased
+  summary and should be verified against the source document before it is acted
+  on. The grounding check proves every claim traces to an input or a retrieved
+  document — it does not establish that the retrieved document applies to this
+  patient. Clinical judgement remains yours.
+
+# Triage is disabled for this audience (see the orchestrator), so this is not
+# reached. Kept so the config shape matches the patient file and a future
+# clinician acuity flag has somewhere to put its wording.
+emergency_disclaimer: >-
+  Escalate per local protocol.

@@ -1,0 +1,152 @@
+# src/assistant/config/requirements.yaml
+# ──────────────────────────────────────
+# Per-intent information policy.  Spec sections 5, 7, 15.
+#
+# Three levels, and the difference between them is the whole design:
+#
+#   safety_critical  absence makes an answer unsafe.        → refuse, ask
+#   required         absence makes an answer unreliable.    → refuse, ask
+#   optional         absence narrows the answer.            → answer, state limit
+#
+# Spec 8 asks whether missing information "materially affects the answer". That
+# judgement is made here, once, by a human, rather than per-turn by a model.
+# `required` is the set that materially affects it; `optional` is the set that
+# does not. A model cannot move a field between the two.
+#
+# Spec 15 forbids collecting information merely because it exists. Every field
+# below has to earn its level, and there is deliberately no intent that asks for
+# occupation, address, income or marital status — those fields do not exist in
+# src/assistant/state.py, so no policy can request them.
+#
+# Field names are validated against state.FIELDS at load time. A typo fails
+# loudly at import rather than becoming a question the patient can never answer.
+
+version: "2026.08.1"
+
+intents:
+
+  # ── symptoms ────────────────────────────────────────────────────────────────
+  # Onset and severity are safety-critical because the same symptom means
+  # different things at different tempos: chest discomfort for three months and
+  # chest discomfort for twenty minutes are not the same question.
+  symptom_assessment:
+    safety_critical: [symptom, symptom_onset, symptom_severity]
+    required: [age, sex, symptom_duration, symptom_location, symptom_trajectory,
+               associated_symptoms]
+    optional: [symptom_character, symptom_frequency, medical_history,
+               current_medications, previous_diagnosis, recent_events]
+    conditional:
+      # Pregnancy changes which causes are likely and which investigations and
+      # treatments are safe. Asked only when it can apply — spec 15.
+      - field: pregnancy_status
+        level: required
+        when:
+          sex_in: [f, female]
+          age_between: [12, 55]
+        reason: >-
+          pregnancy changes both the likely causes of a symptom and which
+          treatments are safe
+
+  # ── medication ──────────────────────────────────────────────────────────────
+  # Allergies are safety-critical: naming a drug to someone with an unrecorded
+  # allergy to it is the single most consequential error available here.
+  # Dose is `required` rather than safety-critical because "what is this drug
+  # for" is answerable without it, while "is my dose right" is not — the
+  # completeness gate refuses either way, and the clarifying question is the
+  # same one.  Spec 17.
+  medication_question:
+    safety_critical: [medication_name, allergies]
+    required: [medication_dose, medication_frequency, medication_reason,
+               age, current_medications, medical_history]
+    optional: [medication_form, sex]
+    conditional:
+      - field: pregnancy_status
+        level: safety_critical
+        when:
+          sex_in: [f, female]
+          age_between: [12, 55]
+        reason: >-
+          many medicines are contraindicated in pregnancy or breastfeeding
+
+  # ── laboratory results ──────────────────────────────────────────────────────
+  # The reference range is safety-critical and must come from the patient's own
+  # report. Spec 18 is explicit that ranges differ between laboratories, so a
+  # remembered "normal range" would be an invented number wearing the clothes of
+  # a retrieved one — exactly what src/llm/grounding.py exists to stop.
+  lab_result_interpretation:
+    safety_critical: [test_name, test_value, test_unit, test_reference_range]
+    required: [age, sex, test_date]
+    optional: [symptom, medical_history, current_medications, previous_diagnosis]
+
+  # ── report explanation ──────────────────────────────────────────────────────
+  medical_report_explanation:
+    safety_critical: [report_text]
+    required: [age]
+    optional: [sex, medical_history, previous_diagnosis, current_medications]
+
+  # ── general condition information ───────────────────────────────────────────
+  # No patient details required: this is education, not assessment. Demanding
+  # age and history before explaining what asthma is would be the
+  # over-questioning spec 15 names as bad behaviour.
+  condition_information:
+    safety_critical: []
+    required: [condition_name]
+    optional: [age, medical_history]
+
+  # ── treatment ───────────────────────────────────────────────────────────────
+  # Treatment questions attract medication answers, so allergies and the current
+  # medication list are safety-critical here for the same reason as above.
+  treatment_question:
+    safety_critical: [condition_name, allergies]
+    required: [age, medical_history, current_medications]
+    optional: [sex, previous_diagnosis]
+    conditional:
+      - field: pregnancy_status
+        level: safety_critical
+        when:
+          sex_in: [f, female]
+          age_between: [12, 55]
+        reason: >-
+          treatment options and their safety differ in pregnancy
+
+  # ── prevention ──────────────────────────────────────────────────────────────
+  preventive_health:
+    safety_critical: []
+    required: [topic]
+    optional: [age, sex, medical_history]
+
+  # ── preparing for an appointment ────────────────────────────────────────────
+  doctor_question_prep:
+    safety_critical: []
+    required: [topic]
+    optional: [symptom, condition_name, previous_diagnosis, current_medications]
+
+  # ── terminology and general education ───────────────────────────────────────
+  terminology:
+    safety_critical: []
+    required: [term]
+    optional: []
+
+  general_education:
+    safety_critical: []
+    required: [topic]
+    optional: []
+
+  # ── states that collect nothing ─────────────────────────────────────────────
+  # `emergency` is listed so the gate has a policy for it, but it is never
+  # reached through the normal flow: spec 16 requires triage to answer
+  # immediately and bypass information collection entirely.
+  emergency:
+    safety_critical: []
+    required: []
+    optional: []
+
+  capabilities:
+    safety_critical: []
+    required: []
+    optional: []
+
+  unknown:
+    safety_critical: []
+    required: []
+    optional: []

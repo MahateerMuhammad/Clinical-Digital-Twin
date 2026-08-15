@@ -1,0 +1,85 @@
+# src/assistant/config/patient_corpus.yaml
+# ────────────────────────────────────────
+# Patient-facing evidence.  Spec sections 11, 12, 33.2, 33.3.
+#
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │ THIS FILE IS DELIBERATELY EMPTY.                                          │
+# │                                                                           │
+# │ Not an oversight, and not a placeholder to be filled by a model. Every    │
+# │ entry here is quoted to a patient under a named source, so writing        │
+# │ entries from memory and attaching a citation would be the fabrication     │
+# │ this whole system is built to prevent — spec 33.3, and the exact defect   │
+# │ that produced "[NIH DailyMed Package Insert: ENOXAPARIN]" next to a       │
+# │ dose that no retrieved document contained.                                │
+# │                                                                           │
+# │ Until it is populated, `src/assistant/evidence.py` returns `no_source`    │
+# │ and the answer stage declines rather than answering from model knowledge. │
+# │ That is the correct behaviour for an empty corpus, and it is tested.      │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
+# Why the existing corpus does not serve this
+# ───────────────────────────────────────────
+# `src/llm/guidelines.py` holds 23 records over 15 concepts — sepsis, AKI, ARDS,
+# DKA, hyperkalaemia, GI bleed, liver failure. All inpatient and intensive care.
+# Measured against common patient questions it returns nothing:
+#
+#     diabetes 0 · hypertension 0 · asthma 0 · migraine 0 · anaemia 0
+#     back pain 0 · contraception 0 · depression 0
+#
+# It is also `review_status: unreviewed` throughout. It is the right corpus for
+# the clinician pipeline and the wrong one for a patient assistant.
+#
+# How to populate this file
+# ─────────────────────────
+# Each entry must be transcribed from a source that was actually opened, with
+# the URL recorded and the retrieval date noted. Paraphrase for readability if
+# needed — but `text` must be a faithful summary of what that page says, and
+# `verbatim: true` only when it is a literal quotation.
+#
+# Suggested starting sources, in the priority order spec 12 sets out:
+#   tier 1  NICE (UK), USPSTF, WHO guidelines
+#   tier 2  NHS.uk, CDC, MedlinePlus, healthdirect.gov.au
+#   tier 3  Mayo Clinic, Cleveland Clinic, Johns Hopkins patient information
+#   tier 4  Cochrane plain-language summaries
+#
+# Schema (all fields required unless marked optional):
+#
+#   - doc_id:        stable unique id, e.g. "NHS-ANAEMIA-IRON"
+#     topics:        [list of lowercase topic keys this answers]
+#     title:         human-readable title
+#     source_name:   the organisation, e.g. "NHS"
+#     source_tier:   1..6, per spec 12
+#     url:           the page actually read
+#     retrieved_on:  YYYY-MM-DD
+#     text:          the patient-facing content, plain language
+#     review_status: unreviewed | clinician_reviewed
+#     verbatim:      true|false (optional, default false)
+#     keywords:      [optional, improves ranking]
+#
+# `review_status: clinician_reviewed` is what closes Milestone 4.4. Until at
+# least one entry carries it, `evidence.retrieve(require_reviewed=True)` returns
+# nothing — which is how a deployment can require review without trusting that
+# it happened.
+
+version: "2026.08.1"
+
+# Domains an entry's `url` may come from. An entry citing anywhere else is
+# rejected at load. Spec 12: do not blindly trust random websites.
+trusted_domains:
+  - nice.org.uk
+  - uspreventiveservicestaskforce.org
+  - who.int
+  - nhs.uk
+  - cdc.gov
+  - medlineplus.gov
+  - nlm.nih.gov
+  - nih.gov
+  - healthdirect.gov.au
+  - mayoclinic.org
+  - my.clevelandclinic.org
+  - hopkinsmedicine.org
+  - cochranelibrary.com
+  - bnf.nice.org.uk
+  - dailymed.nlm.nih.gov
+
+documents: []

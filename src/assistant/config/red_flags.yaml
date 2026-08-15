@@ -1,0 +1,272 @@
+# src/assistant/config/red_flags.yaml
+# ───────────────────────────────────
+# Emergency and urgent-assessment rules.  Spec section 16.
+#
+# Read by src/assistant/triage.py, which runs before intent classification and
+# before any model call. These rules are the one part of the system that must
+# work when everything else is broken: no network, no API key, no model. That is
+# why they are regex over configuration rather than a classifier.
+#
+# Two severities, because spec 16 and spec 6 ask for different things about the
+# same symptom and both are right:
+#
+#   emergency       An immediate threat to life. Answer now, bypass information
+#                   collection entirely (spec 16). Nothing is asked first.
+#
+#   urgent_assess   Could be serious; not established. Show the warning signs
+#                   immediately, then continue with targeted questions (spec 6,
+#                   whose worked example is chest pain entering a question flow).
+#
+# Chest pain sits at `urgent_assess` alone and escalates to `emergency` when it
+# arrives with any of the features that make an acute coronary syndrome likely.
+# Putting bare chest pain at `emergency` would fire on a patient describing three
+# months of intermittent soreness; putting it below `urgent_assess` would let the
+# assistant start a leisurely questionnaire at the one moment that matters.
+#
+# Calibration rule for anyone editing this file: **ambiguity resolves upward.**
+# A false alarm costs a patient an unnecessary worry. A miss costs a patient.
+
+version: "2026.08.1"
+
+# Phrases that suppress a trigger. Deliberately narrow — see triage.py for why
+# third-person mentions do *not* suppress.
+negations:
+  - "\\bno\\b"
+  - "\\bnot\\b"
+  - "\\bnever\\b"
+  - "\\bwithout\\b"
+  - "\\bdenies?\\b"
+  - "\\bdon'?t have\\b"
+  - "\\bdidn'?t have\\b"
+  - "\\bhaven'?t (?:had|got)\\b"
+  - "\\bisn'?t\\b"
+  - "\\baren'?t\\b"
+
+# Markers that place a trigger in the past rather than now.
+historical:
+  - "\\b(?:19|20)\\d{2}\\b"
+  - "\\b\\d+ (?:years?|decades?) ago\\b"
+  - "\\bwhen i was\\b"
+  - "\\bhistory of\\b"
+  - "\\bpreviously\\b"
+  - "\\bin the past\\b"
+  - "\\bused to\\b"
+
+rules:
+
+  # ── cardiac ─────────────────────────────────────────────────────────────────
+  - id: chest_pain
+    severity: urgent_assess
+    label: Chest pain
+    patterns:
+      - "\\bchest (?:pain|pressure|tightness|discomfort|heaviness)\\b"
+      - "\\bpain in my chest\\b"
+      - "\\btight(?:ness)? in my chest\\b"
+    # Any of these alongside the trigger makes it an emergency.
+    escalate_with:
+      - "\\bcrushing\\b"
+      - "\\bradiat\\w+\\b"
+      - "\\bspread(?:ing|s)? to my (?:arm|jaw|neck|back|shoulder)\\b"
+      - "\\b(?:left )?arm\\b.{0,20}\\b(?:pain|numb|heavy)\\b"
+      - "\\bjaw\\b"
+      - "\\bsweat\\w*\\b"
+      - "\\bclammy\\b"
+      - "\\bshort(?:ness)? of breath\\b"
+      - "\\bcan'?t breathe\\b"
+      # Alternation must be grouped: `\bnausea|vomit\w*\b` binds as
+      # (\bnausea) OR (vomit\w*\b), which silently loses the word boundaries and
+      # matched neither "feeling sick" nor "nauseous".
+      - "\\b(?:nausea|nauseous|vomit\\w*|throwing up|feeling sick|feel sick)\\b"
+      - "\\bsudden\\w*\\b"
+      - "\\bsevere\\b"
+      - "\\bworst\\b"
+      - "\\belephant\\b"
+    urgent_advice: >-
+      Chest pain can have many causes, and some of them are serious enough that
+      they should not wait. I cannot tell which one this is from a conversation.
+    emergency_advice: >-
+      The combination you are describing can be a heart attack. This needs
+      emergency assessment now, not later.
+    warning_signs:
+      - Pain spreading to your arm, jaw, neck or back
+      - Shortness of breath
+      - Sweating, feeling clammy, or feeling sick
+      - Feeling faint or losing consciousness
+
+  # ── respiratory ─────────────────────────────────────────────────────────────
+  - id: breathing_difficulty
+    severity: emergency
+    label: Severe difficulty breathing
+    patterns:
+      - "\\bcan'?t breathe\\b"
+      - "\\bcannot breathe\\b"
+      - "\\bstruggling to breathe\\b"
+      - "\\bfighting for (?:breath|air)\\b"
+      - "\\bgasping\\b"
+      - "\\bchoking\\b"
+      - "\\bturning blue\\b"
+      - "\\blips? (?:are |have )?(?:turned )?blue\\b"
+    emergency_advice: >-
+      Difficulty breathing this severe needs emergency help now.
+
+  # ── neurological ────────────────────────────────────────────────────────────
+  - id: stroke
+    severity: emergency
+    label: Possible stroke
+    patterns:
+      - "\\bstroke\\b"
+      - "\\bface (?:is )?droop\\w*\\b"
+      - "\\bslurr\\w+ (?:speech|words)\\b"
+      - "\\bcan'?t speak\\b"
+      - "\\bsudden\\w*\\b.{0,30}\\b(?:weak\\w*|numb\\w*|paralys\\w+)\\b"
+      - "\\b(?:weak\\w*|numb\\w*)\\b.{0,25}\\bone side\\b"
+      - "\\bsudden\\w*\\b.{0,30}\\b(?:confus\\w+|vision loss|can'?t see)\\b"
+      - "\\bworst headache of my life\\b"
+      - "\\bthunderclap headache\\b"
+    emergency_advice: >-
+      These can be signs of a stroke or bleeding in the brain. Treatment works
+      best within a short window, so this needs emergency assessment now.
+
+  - id: seizure
+    severity: emergency
+    label: Seizure
+    patterns:
+      - "\\bseizure\\b"
+      - "\\bconvuls\\w+\\b"
+      - "\\bfit(?:ting)?\\b.{0,20}\\b(?:shaking|jerking)\\b"
+      - "\\bshaking uncontrollably\\b"
+    emergency_advice: >-
+      A seizure needs emergency assessment, particularly a first one or one that
+      does not stop.
+
+  - id: loss_of_consciousness
+    severity: emergency
+    label: Loss of consciousness
+    patterns:
+      - "\\bunconscious\\b"
+      - "\\bunresponsive\\b"
+      - "\\bpassed out\\b"
+      - "\\bblacked out\\b"
+      - "\\bfainted\\b"
+      - "\\bcollapsed\\b"
+      - "\\bwon'?t wake up\\b"
+    emergency_advice: >-
+      Losing consciousness needs urgent medical assessment to find the cause.
+
+  # ── bleeding and trauma ─────────────────────────────────────────────────────
+  - id: severe_bleeding
+    severity: emergency
+    label: Severe bleeding
+    patterns:
+      - "\\bbleeding\\b.{0,25}\\b(?:won'?t stop|heavily|uncontroll\\w+|badly)\\b"
+      - "\\b(?:heavy|uncontrolled|severe) bleeding\\b"
+      - "\\bblood (?:is )?(?:pouring|gushing|soaking)\\b"
+      - "\\bvomiting blood\\b"
+      - "\\bcoughing up blood\\b"
+    emergency_advice: >-
+      Bleeding that will not stop needs emergency help now.
+
+  # ── allergy ─────────────────────────────────────────────────────────────────
+  - id: anaphylaxis
+    severity: emergency
+    label: Severe allergic reaction
+    patterns:
+      - "\\banaphyla\\w+\\b"
+      - "\\bthroat (?:is )?(?:closing|swelling|tight)\\b"
+      - "\\b(?:lips?|tongue|face) (?:is |are )?swell\\w*\\b"
+      - "\\ballergic reaction\\b.{0,30}\\b(?:breath\\w*|swell\\w*|severe)\\b"
+    emergency_advice: >-
+      This can be a severe allergic reaction, which can worsen within minutes and
+      needs emergency treatment now.
+
+  # ── poisoning ───────────────────────────────────────────────────────────────
+  - id: overdose
+    severity: emergency
+    label: Poisoning or overdose
+    patterns:
+      - "\\boverdose[ds]?\\b"
+      - "\\btook too (?:many|much)\\b"
+      - "\\bswallowed\\b.{0,30}\\b(?:bleach|poison|chemical|tablets?|pills?)\\b"
+      - "\\bpoison\\w*\\b"
+    emergency_advice: >-
+      Poisoning and overdose need immediate assessment, even when someone feels
+      well at first — some effects are delayed.
+
+  # ── mental health crisis ────────────────────────────────────────────────────
+  - id: self_harm
+    severity: emergency
+    label: Risk of self-harm
+    patterns:
+      - "\\bkill myself\\b"
+      - "\\bend my life\\b"
+      - "\\bsuicid\\w+\\b"
+      - "\\bwant to die\\b"
+      - "\\bharm myself\\b"
+      - "\\bhurt myself\\b"
+      - "\\bno reason to (?:live|go on)\\b"
+    emergency_advice: >-
+      I am sorry you are feeling like this, and you deserve support from someone
+      who can properly help. Please contact your local emergency number or a
+      suicide crisis line now — they are staffed by people trained for exactly
+      this, and they will talk with you.
+    # Suppresses the standard "go to an emergency department" framing, which is
+    # not the right first step here.
+    suppress_default_disclaimer: true
+
+  # ── obstetric ───────────────────────────────────────────────────────────────
+  - id: pregnancy_emergency
+    severity: emergency
+    label: Pregnancy emergency
+    patterns:
+      - "\\bpregnan\\w+\\b.{0,40}\\b(?:bleeding|severe pain|no movement)\\b"
+      - "\\bbaby (?:is )?not moving\\b"
+      - "\\bwaters? (?:have )?broke\\w*\\b.{0,30}\\bbleeding\\b"
+    emergency_advice: >-
+      This needs assessment by a maternity unit now.
+
+  # ── infection ───────────────────────────────────────────────────────────────
+  - id: sepsis
+    severity: emergency
+    label: Possible sepsis
+    patterns:
+      - "\\bsepsis\\b|\\bseptic\\b"
+      - "\\b(?:mottled|blotchy) skin\\b"
+      - "\\brash\\b.{0,40}\\bdoes ?n'?t fade\\b"
+      - "\\bconfus\\w+\\b.{0,30}\\bfever\\b"
+      - "\\bfever\\b.{0,30}\\bconfus\\w+\\b"
+    emergency_advice: >-
+      These can be signs of sepsis, which worsens quickly and needs emergency
+      treatment.
+
+  # ── urgent but not immediately life-threatening ─────────────────────────────
+  - id: severe_abdominal_pain
+    severity: urgent_assess
+    label: Severe abdominal pain
+    patterns:
+      - "\\b(?:severe|terrible|unbearable|worst)\\b.{0,25}\\b(?:stomach|abdominal|belly|tummy) pain\\b"
+      - "\\b(?:stomach|abdominal|belly|tummy) pain\\b.{0,25}\\b(?:severe|unbearable)\\b"
+    urgent_advice: >-
+      Severe abdominal pain has causes that can need surgery, and it should be
+      assessed rather than waited out.
+    warning_signs:
+      - Pain that is constant and getting worse
+      - A rigid or very tender abdomen
+      - Vomiting that will not stop
+      - Fever alongside the pain
+      - Blood in your stool or vomit
+
+  - id: infant_fever
+    severity: urgent_assess
+    label: Fever in a young infant
+    patterns:
+      - "\\b(?:baby|infant|newborn)\\b.{0,40}\\bfever\\b"
+      - "\\bfever\\b.{0,40}\\b(?:baby|infant|newborn)\\b"
+      - "\\b\\d+ (?:week|month)s? old\\b.{0,40}\\bfever\\b"
+    urgent_advice: >-
+      Fever in a very young baby is assessed differently from fever in an older
+      child or an adult, and it should be seen promptly.
+    warning_signs:
+      - Being difficult to wake, or unusually floppy
+      - A rash that does not fade when pressed
+      - Fast or laboured breathing
+      - Refusing feeds, or far fewer wet nappies than usual

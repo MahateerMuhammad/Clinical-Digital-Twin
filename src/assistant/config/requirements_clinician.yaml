@@ -1,0 +1,173 @@
+# src/assistant/config/requirements_clinician.yaml
+# ────────────────────────────────────────────────
+# Information policy for the CLINICIAN audience.
+#
+# Same three levels as the patient policy, same meaning, different judgement:
+#
+#   safety_critical  absence makes an answer unsafe        → refuse, ask
+#   required         absence makes an answer unreliable    → refuse, ask
+#   optional         absence narrows the answer            → answer, state limit
+#
+# What changes for this audience
+# ──────────────────────────────
+# A clinician can supply laboratory values, so `risk_assessment` — the only
+# intent that reaches the risk models — is reachable at all. A patient cannot,
+# which is why no patient intent lists them.
+#
+# `risk_assessment` deliberately lists exactly the fourteen fields named by
+# `src/llm/payload_validation.REQUIRED_FIELDS`. That is not a coincidence to be
+# maintained by hand: `src/assistant/state.py` generates those field
+# definitions from the same source, so "enough to score" has one definition. If
+# the model's payload contract changes, the field list here is what must be
+# re-checked — `tests/test_backend_api.py` asserts the two agree.
+#
+# Nothing here asks for symptom onset, severity or trajectory. Those are
+# questions for the person experiencing them.
+
+version: "2026.08.1"
+
+# Audience-specific question wording. The field registry's prompts address the
+# person being treated — "How old are you?", "What is your sex at birth?" —
+# which is the wrong question to put to a clinician presenting a case. Only
+# fields whose default is actually wrong are listed; the payload-derived lab
+# prompts ("Peak serum creatinine") already read correctly for this audience.
+prompts:
+  age: Patient age (years)
+  sex: Patient sex (M/F)
+  primary_diagnosis: Primary working diagnosis
+  medication_name: Which agent?
+  test_name: Which test?
+  test_value: Result value
+  test_unit: Units as reported
+  test_reference_range: Reference range from the report
+
+intents:
+
+  # ── the only path to the risk models ────────────────────────────────────────
+  # Everything below `required` is what the boosters were fitted on. Absent
+  # values are not imputed: the payload arrives incomplete, `validate_payload`
+  # names what is missing, and the assistant asks for exactly that.
+  risk_assessment:
+    safety_critical: []
+    required:
+      - age
+      - sex
+      - primary_diagnosis
+      - creatinine_max
+      - bun_max
+      - wbc_max
+      - bicarbonate_min
+      - sodium_min
+      - potassium_max
+      - platelets_min
+      - hematocrit_min
+      - glucose_max
+      - sbp_min
+      - hr_max
+    # Recommended by the payload contract rather than required. Their absence
+    # narrows which tasks clear the coverage floor — prior utilisation in
+    # particular, without which the readmission model is asked to predict
+    # readmission with the patient's own readmission history withheld.
+    optional:
+      - lactate_max
+      - anion_gap_max
+      - spo2_min
+      - rr_max
+      - temperature_max
+      - comorbidities
+      - active_medications
+      - admissions_30d
+      - admissions_90d
+      - admissions_365d
+      - cumulative_los_days
+      - admission_type
+      - admission_location
+      - race
+      - language
+      - insurance
+      - marital_status
+
+  # ── counterfactual: needs an established payload, not a fresh one ───────────
+  # The session already holds whatever was supplied for `risk_assessment`, so
+  # this asks only for the change being proposed. Re-asking would violate
+  # spec 24 and would also be pointless — the state machine has the values.
+  counterfactual:
+    safety_critical: []
+    required:
+      - primary_diagnosis
+    optional:
+      - age
+      - sex
+
+  # ── evidence-only intents: no patient data required ────────────────────────
+  # A guideline question is a guideline question. Demanding a full lab panel
+  # before quoting the Surviving Sepsis Campaign would be the over-questioning
+  # spec 15 forbids, and it would make the common case unusable.
+  guideline_lookup:
+    safety_critical: []
+    required:
+      - primary_diagnosis
+    optional:
+      - age
+      - comorbidities
+      - active_medications
+
+  # Renal function is required, not optional: a dosing answer that ignores it
+  # is the specific error `clinical_agent.py` used to make — an enoxaparin dose
+  # emitted under a fabricated citation with creatinine never read.
+  drug_dosing:
+    safety_critical: []
+    required:
+      - medication_name
+      - creatinine_max
+    optional:
+      - primary_diagnosis
+      - age
+      - bun_max
+      - active_medications
+      - medication_dose
+
+  lab_result_interpretation:
+    safety_critical: []
+    required:
+      - test_name
+      - test_value
+      - test_unit
+    optional:
+      - test_reference_range
+      - age
+      - sex
+      - primary_diagnosis
+
+  terminology:
+    safety_critical: []
+    required: [term]
+    optional: []
+
+  # ── states that collect nothing ─────────────────────────────────────────────
+  # Both are settled before the gate: no set of fields makes them answerable,
+  # so requiring any would be collecting information in order to refuse anyway.
+  record_access:
+    safety_critical: []
+    required: []
+    optional: []
+
+  diagnosis_request:
+    safety_critical: []
+    required: []
+    optional: []
+
+  emergency:
+    safety_critical: []
+    required: []
+    optional: []
+
+  capabilities:
+    safety_critical: []
+    required: []
+    optional: []
+
+  unknown:
+    safety_critical: []
+    required: []
+    optional: []
