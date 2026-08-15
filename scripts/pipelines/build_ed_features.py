@@ -100,9 +100,37 @@ def main() -> int:
                 round(100.0 * feats[c].notna().mean(), 2) for c in cols],
         }).sort_values("non_null_cohort_pct", ascending=False)
 
+        # Whether anything downstream actually consumes these features is derived,
+        # not asserted: an artifact that exists but is unused reads exactly like one
+        # in production unless the report says otherwise, and a hand-written status
+        # line would go stale the first time the matrix is rebuilt.
+        selected = Path("data/processed/admission_level_selected.parquet")
+        consumed = 0
+        if selected.exists():
+            consumed = sum(
+                1 for c in pd.read_parquet(selected).columns if c.startswith("ed_"))
+
         report = Path(CFG.resolve(CFG.paths.tables)) / "ed_feature_coverage.md"
         with report.open("w", encoding="utf-8") as fh:
             fh.write("# Emergency Department Feature Coverage\n\n")
+            if consumed:
+                fh.write(f"> [!NOTE]\n> **Status: in use.** "
+                         f"`admission_level_selected.parquet` carries {consumed} `ed_` "
+                         f"columns, so the trained models consume these features.\n\n")
+            else:
+                fh.write(
+                    "> [!IMPORTANT]\n"
+                    "> **Status: staged, not consumed. No trained model uses these "
+                    "features.**\n>\n"
+                    "> `admission_level_selected.parquet` carries **0** `ed_` columns, so "
+                    "every published metric in `reports/` was produced *without* ED data. "
+                    "The feature set is built, tested and leakage-screened, but it is not "
+                    "wired into the modelling matrix.\n>\n"
+                    "> Consuming it requires rebuilding the selected matrix and retraining "
+                    "Phases 1-5. The cohort and the patient split are unaffected either "
+                    "way — ED data joins onto admissions and never creates them, which "
+                    "`tests/test_ed_features.py` asserts — so this can be done later "
+                    "without invalidating anything already published.\n\n")
             fh.write(f"Generated from `{out}` "
                      f"(window: admittime + {args.window_hours:.0f}h).\n\n")
             fh.write(f"- Cohort admissions: **{len(adm):,}**\n")

@@ -6,7 +6,7 @@ Target leakage prevention and feature exclusion lists for Clinical Digital Twin 
 Prevents data leakage by removing:
 1. Outcome-adjacent columns (e.g. discharge_location, deathtime, dischtime).
 2. Diagnosis-derived features finalized after discharge (e.g. charlson_comorbidity_index, cci_*, dx_*).
-3. Availability-based leakage (e.g. vitals_*, icu_*, fluids_* when predicting ICU admission).
+3. Availability-based leakage (e.g. vital_*, icu_*, fluid_* when predicting ICU admission).
 """
 
 from __future__ import annotations
@@ -189,12 +189,20 @@ READMISSION_EXCLUDE_STRICT = [
     "icu_los_days", "n_icu_stays", "has_icu_stay", "icu_*",
 ] + DISCHARGE_NOTE_DERIVED + FULL_STAY_LAB_COUNTERS + FULL_STAY_MED_CLASS + FULL_STAY_LAB_AGGREGATES + ED_EXCLUDE_PRIMARY
 
-# icu_* / fluids_* / vitals_* features are only populated for admissions that
+# icu_* / fluid_* / vital_* features are only populated for admissions that
 # already had an ICU stay — using them to predict ICU admission is leaking
 # the label through feature-availability itself (non-null pattern == the answer).
+#
+# Singular. These read "fluids_*" and "vitals_*" until 2026-08-11, and the built
+# columns are `fluid_input_total` and `vital_heart_rate_mean` — so neither pattern
+# matched anything and both exclusions were silently inert. Nothing leaked, because
+# the admission matrix happens to carry no such column; the guard was simply not
+# guarding. `tests/test_exclusion_patterns_match.py` now fails on a pattern that
+# matches nothing anywhere in the project's feature namespace, which is what would
+# have caught this the day it was written.
 ICU_ADMISSION_EXCLUDE = [
     "icu_los_days", "n_icu_stays", "has_icu_stay",
-    "icu_*", "fluids_*", "vitals_*",
+    "icu_*", "fluid_*", "vital_*",
     "first_careunit", "last_careunit",
 ] + ED_EXCLUDE_PRIMARY
 
@@ -228,7 +236,8 @@ LOS_EXCLUDE_STRICT = LOS_EXCLUDE + [
     # Direct target/outcome & resolution proxies
     "deathtime", "dischtime", "discharge_location", "los_days", "los_hours", "dod", "hospital_expire_flag",
     "next_admittime", "days_to_readmission", "readmission_30d", "readmit_*",
-    "icu_los_days", "n_icu_stays", "has_icu_stay", "icu_*", "fluids_*", "vitals_*",
+    # Singular `fluid_*` / `vital_*`; see the note on ICU_ADMISSION_EXCLUDE.
+    "icu_los_days", "n_icu_stays", "has_icu_stay", "icu_*", "fluid_*", "vital_*",
     # Post-hoc ICD diagnosis & comorbidity exclusions (leakage from current stay)
     "charlson_comorbidity_index", "cci_*", "dx_*", "primary_icd_code", "icd_embedding_placeholder",
     # Full-admission count and duration aggregates (observation window leakage)
@@ -280,7 +289,7 @@ def match_column_patterns(columns: List[str], patterns: List[str]) -> List[str]:
     columns : list[str]
         List of DataFrame column names.
     patterns : list[str]
-        List of exact column names or wildcard patterns (e.g. 'cci_*', 'vitals_*').
+        List of exact column names or wildcard patterns (e.g. 'cci_*', 'vital_*').
 
     Returns
     -------
@@ -352,7 +361,7 @@ def check_availability_leakage(
     df : pd.DataFrame
         Input dataset.
     feature_prefix : str
-        Prefix or pattern matching feature columns (e.g., 'icu_*', 'vitals_*').
+        Prefix or pattern matching feature columns (e.g., 'icu_*', 'vital_*').
     target_col : str
         Name of target column (e.g., 'has_icu_stay', 'hospital_expire_flag').
 
