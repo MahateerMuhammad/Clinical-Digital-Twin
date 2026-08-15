@@ -8,9 +8,28 @@ import numpy as np
 sys.path.insert(0, os.path.abspath('.'))
 
 from src.llm.feature_space import (
-    align_to_model, encode_admission_frame, feature_coverage,
-    looks_like_admission_row,
+    ONEHOT_KNOWN, align_to_model, as_frame, encode_admission_frame,
+    feature_coverage, looks_like_admission_row, onehot_known,
 )
+
+
+def _dig_payload(payload, path):
+    """
+    Follow a dotted ``path`` into a nested payload, tolerating a flat one.
+
+    Callers hand-build these dicts, so ``{"demographics": {"age": 70}}`` and
+    ``{"age": 70}`` both occur in the wild and both must resolve. The leaf name is
+    tried at the top level before giving up, which keeps every payload written
+    against the older flat shape working unchanged.
+    """
+    node = payload
+    for part in path.split('.'):
+        if not isinstance(node, dict) or part not in node:
+            leaf = path.rsplit('.', 1)[-1]
+            value = payload.get(leaf) if isinstance(payload, dict) else None
+            return value if value != '' else None
+        node = node[part]
+    return node if node != '' else None
 
 #: Measured payload fidelity per task, from `scripts/evaluation/run_payload_fidelity_eval.py`
 #: on the held-out test split. `reference` is AUROC with the full admission feature
@@ -21,11 +40,11 @@ from src.llm.feature_space import (
 #: Regenerate with `--patch` after any Phase 1-5 retrain; `tests/test_payload_fidelity.py`
 #: fails if these drift from reports/tables/payload_fidelity_evaluation.md.
 PAYLOAD_FIDELITY = {
-    'mortality':     {'reference': 0.9448, 'payload': 0.8470},
-    'readmission':   {'reference': 0.7062, 'payload': 0.5673},
-    'icu_admission': {'reference': 0.9209, 'payload': 0.6012},
-    'hospital_los':  {'reference': 0.8997, 'payload': 0.4894},
-    'deterioration': {'reference': 0.7858, 'payload': 0.4976},
+    'mortality':     {'reference': 0.9448, 'payload': 0.8809},
+    'readmission':   {'reference': 0.7062, 'payload': 0.6684},
+    'icu_admission': {'reference': 0.9209, 'payload': 0.8183},
+    'hospital_los':  {'reference': 0.8997, 'payload': 0.7314},
+    'deterioration': {'reference': 0.7858, 'payload': 0.7617},
 }
 
 #: A payload-derived prediction is served only if it keeps at least this fraction of
@@ -203,6 +222,40 @@ class LiveModelRunner:
         'anion_gap_max': 12.0, 'chloride_max': 102.0,
     }
 
+    #: Payload path → the *source* categorical columns the boosters were fitted on.
+    #:
+    #: These are emitted as categoricals and expanded by `encode_admission_frame`,
+    #: not written out as dummy names. Writing `gender_M` by hand was the old
+    #: approach and it silently under-served every model: Phase 5 carries both
+    #: `gender_F` and `gender_M`, so a female patient arrived with `gender_M = 0.0`
+    #: and `gender_F` absent — the model saw "not male, sex unknown".
+    PAYLOAD_CATEGORICALS = {
+        'demographics.gender': 'gender',
+        'demographics.race': 'race',
+        'demographics.language': 'language',
+        'demographics.insurance': 'insurance',
+        'demographics.marital_status': 'marital_status',
+        'admission_context.admission_type': 'admission_type',
+        'admission_context.admission_location': 'admission_location',
+    }
+
+    #: Payload path → plain numeric features. `prior_*` is the Expansion A&D block
+    #: that Phase 2 was built on: a readmission model deprived of the patient's own
+    #: readmission history is being asked the question with the answer removed,
+    #: which is the most likely single cause of its 32.6% payload retention.
+    PAYLOAD_NUMERICS = {
+        'demographics.age': 'anchor_age',
+        'prior_utilisation.admissions_30d': 'prior_admissions_30d',
+        'prior_utilisation.admissions_90d': 'prior_admissions_90d',
+        'prior_utilisation.admissions_365d': 'prior_admissions_365d',
+        'prior_utilisation.cumulative_los_days': 'prior_cumulative_los_days',
+    }
+    # `diagnosis_count` and `procedure_count` are deliberately absent. They dominate
+    # the mortality SHAP ranking and mapping them would lift the coverage figure, but
+    # they are counts of what the hospital has coded by hour 24 — not something a
+    # clinician dictates at intake. Claiming them would make coverage measure the
+    # schema's ambition rather than what an unseen patient can actually supply.
+
     MED_KEYWORDS = {
         'med_class_antibiotic': ('vancomycin', 'cefepime', 'antibiotic', 'meropenem',
                                  'piperacillin', 'ceftriaxone'),
@@ -245,14 +298,22 @@ class LiveModelRunner:
         if not isinstance(payload, dict):
             return pd.Series(dtype=float)
 
-        demos = payload.get('demographics', {}) or {}
         labs = payload.get('presentation_labs', {}) or {}
         meds = [str(m).lower() for m in (payload.get('active_medications', []) or [])]
 
-        flat = {
-            'anchor_age': float(demos.get('age', 65) or 65),
-            'gender_M': 1.0 if str(demos.get('gender', '')).upper() == 'M' else 0.0,
-        }
+        flat = {}
+        for path, column in self.PAYLOAD_NUMERICS.items():
+            value = _dig_payload(payload, path)
+            if value is None:
+                continue
+            try:
+                flat[column] = float(value)
+            except (TypeError, ValueError):
+                continue
+        # Age is the one numeric with a default: it is a required field, so reaching
+        # here without it means an explicitly incomplete payload, and 65 keeps the
+        # older behaviour rather than dropping the feature entirely.
+        flat.setdefault('anchor_age', 65.0)
 
         for field, columns in self.PAYLOAD_LAB_FEATURES.items():
             raw = labs.get(field, labs.get(f'lab_{field}', self.LAB_DEFAULTS.get(field)))
@@ -269,25 +330,85 @@ class LiveModelRunner:
         for col, keywords in self.MED_KEYWORDS.items():
             flat[col] = 1.0 if any(k in joined for k in keywords) else 0.0
 
-        return pd.Series(flat)
+        return self._expand_payload_categoricals(payload, flat)
+
+    def _expand_payload_categoricals(self, payload, flat):
+        """
+        Attach the payload's categoricals as booster dummies and return the Series.
+
+        The levels come from ``adm_df`` rather than a table in this file. A payload
+        saying ``race = "WHITE"`` determines all thirty-two ``race_*`` features, but
+        only if the encoder knows the other thirty-one exist — and the authority on
+        that is the cohort the models were fitted on, which is the one source that
+        cannot drift out of step with them.
+
+        Where ``adm_df`` is absent the observed level is still emitted and the
+        per-row provenance from ``encode_admission_frame`` travels on ``attrs``, so
+        :func:`align_to_model` can license the same zeros downstream. That path is
+        the fallback, not the design: it depends on the consumer honouring ``attrs``.
+        """
+        supplied = {}
+        for path, column in self.PAYLOAD_CATEGORICALS.items():
+            value = _dig_payload(payload, path)
+            if value is None or (isinstance(value, str) and not value.strip()):
+                continue
+            supplied[column] = str(value).strip()
+
+        if not supplied:
+            return pd.Series(flat, dtype=float)
+
+        frame = pd.DataFrame([{**flat, **supplied}])
+        for column, value in supplied.items():
+            levels = self._category_levels(column)
+            if levels is None:
+                continue
+            # Normalised against the cohort's own spelling: a payload saying "white"
+            # or "Male" must land on the level the booster was fitted with, and an
+            # unrecognised value is left as-is so it expands to a column the reindex
+            # discards — never onto the wrong level.
+            match = {str(x).strip().casefold(): x for x in levels}.get(value.casefold())
+            frame[column] = pd.Categorical(
+                [match if match is not None else value],
+                categories=list(levels) if match is not None else None,
+            )
+
+        encoded = encode_admission_frame(frame, drop_outcomes=False)
+        series = encoded.iloc[0]
+        series.attrs[ONEHOT_KNOWN] = onehot_known(encoded)
+        return series
+
+    def _category_levels(self, column):
+        """The cohort's levels for ``column``, or None if they cannot be established."""
+        if self.adm_df is None or column not in self.adm_df.columns:
+            return None
+        values = self.adm_df[column]
+        if isinstance(values.dtype, pd.CategoricalDtype):
+            return list(values.cat.categories)
+        return None
 
     def payload_feature_coverage(self, payload, task='mortality'):
         """
         Fraction of the task model's features the payload actually populates.
 
         An unseen payload cannot supply admission-derived features such as
-        `diagnosis_count`, `procedure_count` or the admission-type dummies, and those
-        dominate the mortality model's SHAP ranking. They are zero-filled, which is a
-        real limitation of payload-based inference rather than a bug — but it must be
-        visible, because a zero-filled feature is indistinguishable from a genuine
-        zero once the matrix is built.
+        `diagnosis_count` or `procedure_count`, and those dominate the mortality
+        model's SHAP ranking. They are left missing, which is a real limitation of
+        payload-based inference rather than a bug — but it must stay visible, because
+        the number this returns is what the coverage guard acts on.
+
+        The admission-type dummies used to be listed here as equally unreachable.
+        They are not: they were merely never asked for. Asking moved a complete
+        payload from ~18% to ~68% of the mortality feature space, and took three
+        tasks over the retention floor. The distinction is worth preserving —
+        genuinely unsuppliable is not the same as not-yet-requested, and the first
+        was being used to excuse the second.
         """
         model = self.lgbm_models.get(task)
         names = None if model is None else self._feature_names(model)
         if not names:
             return 0.0
         supplied = self._convert_payload_to_series(payload)
-        return feature_coverage(supplied.to_frame().T, names)
+        return feature_coverage(as_frame(supplied), names)
 
     def get_patient_row(self, hadm_id):
         """
@@ -406,18 +527,55 @@ class LiveModelRunner:
         # it. NaN is the missing-value representation both LightGBM and XGBoost were
         # fitted with. On the test split this alone takes payload-based mortality
         # AUROC from 0.8180 to 0.8470; see src/llm/feature_space.py.
-        X_sub = align_to_model(patient_features.to_frame().T, req_cols)
+        # `as_frame`, not `to_frame().T`: the latter drops the one-hot provenance, and
+        # with it the zeros a supplied category licenses — so the scored vector would
+        # disagree with the coverage figure reported alongside it.
+        X_sub = align_to_model(as_frame(patient_features), req_cols)
         raw_prob = float(model.predict_proba(X_sub)[0, 1])
         
         calibrator = self.calibrators.get(task_key)
+        cal_prob = None
         if calibrator is not None and hasattr(calibrator, 'predict'):
             try:
-                cal_prob = float(calibrator.predict([raw_prob])[0])
-                return raw_prob, float(np.clip(cal_prob, 0.0001, 0.9999))
+                cal_prob = float(np.clip(float(calibrator.predict([raw_prob])[0]),
+                                         0.0001, 0.9999))
             except Exception:
-                return raw_prob, float(np.clip(raw_prob, 0.0001, 0.9999))
+                cal_prob = None
+        if cal_prob is None:
+            cal_prob = float(np.clip(raw_prob, 0.0001, 0.9999))
 
-        return raw_prob, float(np.clip(raw_prob, 0.0001, 0.9999))
+        # Age-band refinement on top of the global value. `reports/slice_evaluation.md`
+        # measured what the headline ECE of 0.0036 concealed: for patients aged 85+
+        # the mortality model observed 5.13% and predicted 3.95%. The band
+        # calibrators correct that residual bias without touching the booster.
+        #
+        # Fail-open on every path — absent artefact, unknown age, unfitted band,
+        # transform error. A calibration refinement must not be able to take
+        # prediction down; it improves a number that was already being served.
+        band_prob = self.group_calibrators.calibrate(
+            task_key, cal_prob, age=self._patient_age(patient_features))
+        return raw_prob, band_prob if band_prob is not None else cal_prob
+
+    @staticmethod
+    def _patient_age(patient_features):
+        """Age from the scored feature vector, or None if it is not there."""
+        try:
+            value = patient_features.get('anchor_age')
+        except Exception:
+            return None
+        try:
+            f = float(value)
+        except (TypeError, ValueError):
+            return None
+        return None if f != f else f
+
+    @property
+    def group_calibrators(self):
+        """Age-band calibrators, loaded once and never required."""
+        if getattr(self, "_group_calibrators", None) is None:
+            from src.models.group_calibration import GroupCalibrators
+            self._group_calibrators = GroupCalibrators.load()
+        return self._group_calibrators
 
     #: results key ← task key
     TASK_KEYS = {

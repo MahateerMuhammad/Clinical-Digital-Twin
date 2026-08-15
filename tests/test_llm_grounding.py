@@ -223,10 +223,24 @@ class AdversarialLLMTests(unittest.TestCase):
         self.assertEqual(r.generation_mode, "deterministic_llm_rejected")
         self.assertIn("Observed values", r.report_markdown)
 
-    def test_null_backend_passes_through_verified(self):
+    def test_null_backend_reports_deterministic_not_verified(self):
+        """
+        A no-op backend must not be reported as a verified LLM rephrase.
+
+        This previously asserted `llm_rephrased_verified`, and the assertion was
+        wrong rather than the code. NullBackend returns the deterministic text
+        unchanged; running that through the verifier is a tautology, because the
+        text was grounded before it was handed over. The mode is read as evidence
+        that a model produced the prose and a checker approved it, and neither
+        happened.
+
+        It was not academic: `run_llm_rephrase_eval.py --backend null` reported a
+        100% verifier pass rate over ten held-out admissions with no model
+        installed. The pipeline now skips a passthrough backend entirely.
+        """
         r = self._pipeline(NullBackend()).generate(PAYLOAD)
-        self.assertEqual(r.generation_mode, "llm_rephrased_verified")
-        self.assertTrue(r.grounding["ok"])
+        self.assertEqual(r.generation_mode, "deterministic")
+        self.assertIn("Observed values", r.report_markdown)
 
 
 class PipelineGateTests(unittest.TestCase):

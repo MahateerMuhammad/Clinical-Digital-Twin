@@ -34,16 +34,36 @@ therefore reached the model with 78 of 164 features populated — the row path w
 quietly as degraded as the payload path it was meant to be the reference for.
 ``encode_admission_frame`` does the one-hot expansion so those features land.
 
-Phase 5 (deterioration, XGBoost) is the deliberate exception: ``src/models/
-deterioration.py`` coerces its object columns with ``errors="coerce"``, so
-``admission_type`` and eight others were all-NaN *during training* too. Encoding
-drops them from the frame and the reindex restores them as NaN, which is exactly
-what the model was fitted against.
+``src/models/deterioration.py`` coerces its object columns with ``errors="coerce"``,
+so ``admission_type`` and eight others were all-NaN during *its* training. That
+model is superseded: the promoted Phase 5 artifact is the landmark model, and
+``scripts/pipelines/run_deterioration_landmark.py`` builds its matrix by calling
+``encode_admission_frame`` here. Its ``race_*`` columns are therefore real one-hot
+dummies, exactly like Phases 1-4. There is no categorical exception any more.
+
+Absent dummies are 0.0, not NaN
+───────────────────────────────
+The rule at the top of this docstring inverts for one-hot families, and getting
+that backwards cost more than getting the numeric fill backwards did.
+
+``pd.get_dummies`` emits only the levels a frame actually contains. A payload
+carrying ``race = "WHITE"`` produces ``race_WHITE`` alone, so the other thirty-one
+``race_*`` features the booster expects are absent — and filling them with NaN says
+"we do not know whether this patient is Black", when the payload just said they are
+White. Every sibling of a supplied category is a **known zero**. The training
+matrix, one-hot encoded over the whole cohort, contained those zeros; withholding
+them at serving time is a train/serve mismatch, not conservatism.
+
+The distinction that makes this safe is between a category that was *supplied* and
+one that was *not*. Only the former licences the zeros, and only for the rows where
+the source value is non-null — so the mask is tracked per column and per row rather
+than assumed. A frame that never mentions ``race`` still gets NaN across all
+thirty-two, which is the honest answer for it.
 """
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence
+from typing import Dict, Iterable, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -65,6 +85,36 @@ IDENTIFIER_COLUMNS: tuple[str, ...] = (
 
 #: Object columns with more levels than this were excluded at fit time.
 MAX_CATEGORY_LEVELS = 100
+
+#: ``DataFrame.attrs`` key holding ``{dummy_prefix: row-mask of supplied values}``.
+#: Written by :func:`encode_admission_frame`, consumed by :func:`align_to_model` to
+#: decide which absent dummies are known zeros. Passed explicitly between the two in
+#: :func:`design_matrix`; ``attrs`` is a convenience for callers that encode
+#: separately, and pandas does not guarantee it survives arbitrary operations.
+ONEHOT_KNOWN = "onehot_known"
+
+
+def onehot_known(frame: pd.DataFrame) -> Dict[str, np.ndarray]:
+    """The one-hot provenance recorded on ``frame``, or empty if it was not encoded."""
+    known = frame.attrs.get(ONEHOT_KNOWN) or {}
+    return {k: v for k, v in known.items() if len(v) == len(frame)}
+
+
+def as_frame(series: pd.Series) -> pd.DataFrame:
+    """
+    A one-row frame from ``series``, carrying its one-hot provenance across.
+
+    ``Series.to_frame().T`` drops ``attrs``, and every caller that scores a payload
+    does exactly that before aligning. Without the carry-over the provenance is
+    silently lost between the encoder and the consumer, and the zeros it licenses
+    revert to NaN — the failure is invisible, because a NaN-filled matrix scores
+    perfectly happily.
+    """
+    frame = series.to_frame().T
+    known = series.attrs.get(ONEHOT_KNOWN)
+    if known:
+        frame.attrs[ONEHOT_KNOWN] = known
+    return frame
 
 
 def _is_categorical(series: pd.Series) -> bool:
@@ -116,45 +166,107 @@ def encode_admission_frame(
              else oversized).append(c)
     df = df.drop(columns=oversized)
 
+    # Captured before the expansion, because afterwards the source columns are gone
+    # and there is no way to tell a dummy whose sibling is a known zero from a
+    # numeric feature that simply was not supplied.
+    known = {
+        f"{str(c).replace(' ', '_')}_": df[c].notna().to_numpy(dtype=bool)
+        for c in cats
+    }
+
     if cats:
         df = pd.get_dummies(df, columns=cats, drop_first=False, dtype=float)
 
     df.columns = [str(c).replace(" ", "_") for c in df.columns]
-    return df.loc[:, ~df.columns.duplicated()]
+    out = df.loc[:, ~df.columns.duplicated()]
+    out.attrs[ONEHOT_KNOWN] = known
+    return out
+
+
+def _known_zero_column(
+    name: str,
+    known: Dict[str, np.ndarray],
+    index: pd.Index,
+) -> Optional[pd.Series]:
+    """
+    The fill for an absent dummy ``name``, or None if it is not a dummy at all.
+
+    Longest prefix wins. ``admission_type`` and ``admission_location`` are both live
+    source columns, and matching the shorter one first would attribute
+    ``admission_location_EMERGENCY_ROOM`` to the wrong family — harmless while both
+    are supplied, wrong the moment only one is.
+    """
+    for prefix in sorted(known, key=len, reverse=True):
+        if name.startswith(prefix):
+            # 0.0 where the category was supplied for that row, NaN where it was not.
+            return pd.Series(np.where(known[prefix], 0.0, np.nan),
+                             index=index, dtype=float)
+    return None
 
 
 def align_to_model(
     frame: pd.DataFrame,
     feature_names: Sequence[str],
+    known: Optional[Dict[str, np.ndarray]] = None,
 ) -> pd.DataFrame:
     """
-    Reindex ``frame`` onto ``feature_names``, leaving absent features as NaN.
+    Reindex ``frame`` onto ``feature_names``, filling absent features honestly.
 
-    The fill is NaN and not 0.0 deliberately; see the module docstring. Values that
-    are present but non-numeric are coerced, which also yields NaN — a string in a
-    numeric feature is not evidence of a zero either.
+    Absent numeric features are NaN and not 0.0; absent *dummies* of a category that
+    was supplied are 0.0 and not NaN. Both directions are argued in the module
+    docstring. ``known`` maps dummy prefix → per-row mask of supplied categories and
+    comes from :func:`encode_admission_frame`; without it every absent feature is
+    NaN, which is the old behaviour and still the correct one for an unencoded frame.
+
+    Values that are present but non-numeric are coerced, which also yields NaN — a
+    string in a numeric feature is not evidence of a zero either.
     """
+    known = onehot_known(frame) if known is None else known
     absent = pd.Series(np.nan, index=frame.index, dtype=float)
+
+    def column(name: str) -> pd.Series:
+        if name in frame.columns:
+            return pd.to_numeric(frame[name], errors="coerce")
+        # Explicit `is None`: a Series has no usable truth value, and an all-zero
+        # fill is exactly the case `or` would have silently discarded.
+        fill = _known_zero_column(name, known, frame.index)
+        return absent if fill is None else fill
+
     # Built in one pass rather than by repeated insertion: these matrices run to ~170
     # columns and per-column assignment fragments the block manager badly enough that
     # pandas warns about it.
     return pd.concat(
-        [(pd.to_numeric(frame[name], errors="coerce") if name in frame.columns
-          else absent).rename(name) for name in feature_names],
-        axis=1,
+        [column(name).rename(name) for name in feature_names], axis=1,
     ).astype(float)
 
 
-def feature_coverage(frame: pd.DataFrame, feature_names: Sequence[str]) -> float:
+def feature_coverage(
+    frame: pd.DataFrame,
+    feature_names: Sequence[str],
+    known: Optional[Dict[str, np.ndarray]] = None,
+) -> float:
     """
-    Fraction of ``feature_names`` genuinely present in ``frame``.
+    Fraction of ``feature_names`` whose value is genuinely known for ``frame``.
+
+    A dummy absent because its category was supplied as something else counts as
+    known — the payload determined it to be zero just as surely as if it had been
+    written out. Counting only literally-present columns understated coverage badly:
+    supplying ``race`` informs thirty-two features and was credited with one.
 
     Must be measured *before* :func:`align_to_model` runs: once the matrix is built
     an absent feature and a supplied NaN are the same value, and the distinction
     this number reports no longer exists.
     """
+    known = onehot_known(frame) if known is None else known
     have = set(frame.columns)
-    return sum(f in have for f in feature_names) / len(feature_names)
+    # Only families supplied for *every* row are credited. Coverage is one number for
+    # the whole frame, so a category present on some rows and null on others cannot be
+    # reported as known without overstating it for the rows that lack it.
+    prefixes = tuple(p for p, mask in known.items() if mask.all())
+    return sum(
+        f in have or (bool(prefixes) and f.startswith(prefixes))
+        for f in feature_names
+    ) / len(feature_names)
 
 
 def design_matrix(
@@ -164,7 +276,11 @@ def design_matrix(
 ) -> tuple[pd.DataFrame, float]:
     """Encode, measure coverage, then align. Returns ``(X, coverage)``."""
     encoded = encode_admission_frame(frame) if encode else frame
-    return align_to_model(encoded, feature_names), feature_coverage(encoded, feature_names)
+    # Read once and passed explicitly: `attrs` is not guaranteed to survive whatever
+    # a caller does to `frame` before this, and both consumers must see the same map.
+    known = onehot_known(encoded)
+    return (align_to_model(encoded, feature_names, known),
+            feature_coverage(encoded, feature_names, known))
 
 
 def looks_like_admission_row(obj: Iterable) -> bool:

@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import random
 import threading
 import time
@@ -111,6 +112,19 @@ class EvidenceCache:
             pass  # cache write failure must never break retrieval
 
     @staticmethod
+    def _redact(text: Any) -> str:
+        """Strip an api_key query parameter from anything user-visible.
+
+        The key is appended only at request time and the cache is keyed on the
+        un-keyed URL, so it never reaches disk. It can still reach an exception
+        message: a `URLError` raised by urlopen may carry the request URL, and
+        that string is interpolated into `RetrievalUnavailable`. Redacting at
+        the boundary is cheaper than reasoning about which urllib errors happen
+        to include it.
+        """
+        return re.sub(r"(api_key=)[^&\s]+", r"\1<redacted>", str(text))
+
+    @staticmethod
     def _with_api_key(url: str) -> str:
         key = os.environ.get(NCBI_API_KEY_ENV)
         if key and "eutils.ncbi.nlm.nih.gov" in url and "api_key=" not in url:
@@ -167,7 +181,8 @@ class EvidenceCache:
             self.stats["stale_served"] += 1
             return entry.body
         self.stats["error"] += 1
-        raise RetrievalUnavailable(f"could not retrieve {url}: {last_err}")
+        raise RetrievalUnavailable(
+            self._redact(f"could not retrieve {url}: {last_err}"))
 
     def get_json(self, url: str, *, force_refresh: bool = False) -> dict:
         body = self.get(url, force_refresh=force_refresh)

@@ -6,7 +6,7 @@ import json
 import shap
 import pandas as pd
 import numpy as np
-from src.llm.feature_space import align_to_model
+from src.llm.feature_space import align_to_model, as_frame
 from src.llm.model_runner import LiveModelRunner
 from src.llm.rag_corpus import rag_store
 from src.llm.llm_engine import RealLLMEngine
@@ -68,7 +68,7 @@ class EnterpriseClinicalAgent:
         # Same NaN fill the prediction uses. Explaining a zero-filled vector while
         # scoring a NaN-filled one attributes the risk to a different patient than
         # the one the number came from.
-        X_sample = align_to_model(p_series.to_frame().T, feat_cols)
+        X_sample = align_to_model(as_frame(p_series), feat_cols)
 
         explainer = shap.TreeExplainer(model)
         shap_vals = explainer.shap_values(X_sample)

@@ -39,13 +39,18 @@ __all__ = ["PipelineResult", "ClinicalReportPipeline"]
 #: drove ICU-admission estimates to 0.89 against a 0.16 base rate. Two things have since
 #: changed. Unsupplied features now reach the boosters as NaN rather than 0.0, which is
 #: what produced that inflation; and `validate_payload` refuses any payload missing a
-#: required field, so everything reaching here is complete and lands at ~18% coverage.
-#: A 30% floor therefore fired on every payload without exception, discarding the
-#: mortality estimate — the one output measured to retain most of its validated
-#: discrimination — alongside the four that genuinely do not.
+#: required field, so everything reaching here is complete. A 30% floor therefore
+#: fired on every payload without exception, discarding the mortality estimate — the
+#: one output measured to retain most of its validated discrimination — alongside the
+#: four that genuinely did not.
 #:
-#: Set below what a complete payload achieves, so it catches input the retention
-#: measurement does not describe without overriding the measurement itself.
+#: A complete payload reached ~18% coverage when that was written. It now reaches
+#: ~68%, because the payload path emits source categoricals and lets the encoder
+#: expand them instead of writing dummy names by hand: one supplied `race` determines
+#: thirty-two features rather than one. The floor is deliberately *not* raised to
+#: track that. It is a backstop against input the retention measurement does not
+#: describe, and pinning it just under whatever today's complete payload happens to
+#: score would convert it into a second, unmeasured gate competing with the first.
 MIN_FEATURE_COVERAGE = 0.10
 
 
@@ -132,9 +137,9 @@ class ClinicalReportPipeline:
                 # LiveModelRunner, from measured retention of each model's
                 # discrimination; this fires only for input so sparse that the
                 # measurement does not describe it. A payload that passes
-                # validate_payload carries every required field and lands at ~18%
-                # coverage, so under the old 30% floor this branch suppressed *every*
-                # task unconditionally — including mortality, which retains 78% of its
+                # validate_payload carries every required field, so under the old 30%
+                # floor this branch suppressed *every* task unconditionally —
+                # including mortality, the one that retained most of its validated
                 # AUROC lift. Coverage counts how much input is missing; it says
                 # nothing about whether what remains still discriminates, and it was
                 # never the right instrument for that question.
@@ -273,7 +278,14 @@ class ClinicalReportPipeline:
         res.report_markdown = deterministic_md
         res.generation_mode = "deterministic"
 
-        if use_llm and self.llm_backend is not None:
+        # A passthrough backend is not consulted at all. Calling it would return the
+        # deterministic text, sail through the verifier — it was already grounded —
+        # and be recorded as `llm_rephrased_verified`, which reads as "a model wrote
+        # this and the checker approved it". Neither happened. Measured on 10
+        # held-out cases the effect was a reported 100% verifier pass rate with no
+        # model installed; see reports/tables/llm_rephrase_evaluation.md.
+        if use_llm and self.llm_backend is not None \
+                and not getattr(self.llm_backend, "passthrough", False):
             t = time.perf_counter()
             try:
                 candidate = self.llm_backend.rephrase(
