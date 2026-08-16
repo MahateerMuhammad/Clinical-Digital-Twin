@@ -1,0 +1,18 @@
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  margin-bottom: var(--s-6);
+}
+
+.title {
+  font-size: var(--t-2xl);
+}
+
+.subtitle {
+  margin-top: var(--s-1);
+  max-width: var(--measure);
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}

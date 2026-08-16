@@ -1,0 +1,31 @@
+.empty {
+  font-size: var(--t-sm);
+  color: var(--n-500);
+  line-height: var(--lh-body);
+}
+
+.missing,
+.limitations {
+  list-style: none;
+  padding: 0;
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+
+.missing li,
+.limitations li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) 0;
+}
+
+.missing li + li,
+.limitations li + li {
+  border-top: 1px solid var(--n-100);
+}
+
+.limitations li {
+  color: var(--n-500);
+}

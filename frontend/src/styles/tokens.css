@@ -107,6 +107,7 @@
 
   /* ── layout ───────────────────────────────────────────────────────────────*/
   --sidebar-w: 232px;
+  --panel-w: 360px;   /* the case panel — wide enough for a quote line */
   --measure: 68ch;  /* readable line length for composed clinical prose */
 }
 

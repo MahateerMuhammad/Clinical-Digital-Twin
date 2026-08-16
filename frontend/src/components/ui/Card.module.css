@@ -1,0 +1,31 @@
+.card {
+  background: var(--n-0);
+  border-radius: var(--r);
+  box-shadow: var(--sh-sm);
+  padding: var(--s-5);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--t-lg);
+  font-weight: var(--w-heading);
+  color: var(--n-900);
+}
+
+.note {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+
+/* Sections stack with the same rhythm everywhere they appear. */
+.stack > * + * {
+  margin-top: var(--s-4);
+}

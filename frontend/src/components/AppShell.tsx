@@ -35,8 +35,8 @@ export function AppShell() {
         </nav>
 
         <p className={s.notice}>
-          Localhost, no authentication. Not for real patient data — this
-          instance is a demonstration over de-identified MIMIC-IV.
+          Localhost, no authentication. Not for real patient data. This instance
+          is a demonstration over de-identified MIMIC-IV.
         </p>
       </aside>
 

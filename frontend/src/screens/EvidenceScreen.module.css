@@ -1,0 +1,79 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.stats {
+  display: flex;
+  gap: var(--s-7);
+}
+
+.figure,
+.figureFlagged {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xl);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-tight);
+  color: var(--n-900);
+}
+
+/* Zero clinician-reviewed documents is a real limitation, so it gets the one
+ * status colour on this screen. Everything else stays neutral. */
+.figureFlagged {
+  color: var(--warn);
+}
+
+.figureLabel {
+  margin-top: var(--s-1);
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+
+.caveat {
+  font-size: var(--t-sm);
+  color: var(--n-700);
+  line-height: var(--lh-body);
+  max-width: var(--measure);
+}
+
+.concepts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.chip,
+.chipOn {
+  padding: var(--s-1) var(--s-3);
+  border: none;
+  border-radius: var(--r-pill);
+  font-size: var(--t-xs);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+
+.chip {
+  background: var(--n-50);
+  color: var(--n-700);
+}
+
+.chip:hover {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.chipOn {
+  background: var(--accent);
+  color: var(--n-0);
+}
+
+.title {
+  color: var(--n-900);
+}
+
+.topics,
+.faint {
+  color: var(--n-500);
+  font-size: var(--t-xs);
+}

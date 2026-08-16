@@ -39,11 +39,29 @@ export interface Fact {
  * coverage falls below the retention floor is named and explained rather than
  * scored badly or shown as zero.
  */
-export interface Prediction {
+export interface TaskPrediction {
+  key: string;
+  label: string;
   probability: number | null;
-  uncertainty: number | null;
+  /** Before calibration. Shown only where the difference is instructive. */
+  raw_probability: number | null;
   withheld: boolean;
   reason: string;
+}
+
+/**
+ * The model panel for one turn.
+ *
+ * Confidence is one label for the whole inference, not a number per task —
+ * that is what the runner reports, and a per-task figure would show a
+ * precision these models do not have.
+ */
+export interface Predictions {
+  tasks: TaskPrediction[];
+  risk_tier: string;
+  model_confidence: string;
+  calibration_statement: string;
+  input_kind: string;
 }
 
 /** A retrieved document. `tier` is trust rank, not decoration. */
@@ -69,7 +87,8 @@ export interface TurnResponse {
   verified: boolean | null;
   intent: string | null;
   facts: Fact[];
-  predictions: Record<string, Prediction>;
+  /** null when the turn ran no model — an empty object would imply it did. */
+  predictions: Predictions | null;
   sources: Source[];
   /** Present only when the server runs with CDT_ASSISTANT_DEBUG=1. */
   debug?: TurnDebug;
@@ -134,10 +153,12 @@ export interface EvidenceDoc {
   doc_id: string;
   title: string;
   tier: number;
+  tier_name: string;
   source_name: string;
   url: string;
   topics: string[];
   review_status: string;
+  strength: string;
 }
 
 export interface EvidenceResponse {
