@@ -58,7 +58,7 @@ Thumbs.db
 *.html
 
 kaggle_bundle/
-
+node_modules/
 
 # Reports and generated assets
 # You can uncomment these if you want to push reports, 
@@ -69,17 +69,9 @@ kaggle_bundle/
 # Temporary/test scripts
 test_mixed.py
 
-# Zip archives
-*.zip
-src.zip
 
 
 # Secrets
-#
-# `.env` was NOT covered before. The `env/` entry above matches a virtualenv
-# directory, not the dotfile — so the first `.env` written with a real API key
-# would have been committed. `.env.example` is deliberately re-included: it
-# documents the variables and contains no values.
 .env
 .env.*
 !.env.example
