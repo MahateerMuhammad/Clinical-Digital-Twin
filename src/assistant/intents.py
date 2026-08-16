@@ -34,7 +34,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 __all__ = ["Intent", "IntentResult", "classify", "resolve_intent",
            "MIN_CONFIDENCE", "SWITCH_CONFIDENCE",
-           "PATIENT", "CLINICIAN", "MODES", "MODE_INTENTS"]
+           "PATIENT", "CLINICIAN", "MODES", "MODE_INTENTS",
+           "KNOWLEDGE_INTENTS"]
 
 
 #: Audience. The same message means different things depending on who typed it:
@@ -85,6 +86,34 @@ class Intent(str, Enum):
     #: The opening turn, or a request to know what the assistant can do.
     CAPABILITIES = "capabilities"
     UNKNOWN = "unknown"
+
+
+#: Questions about medicine rather than about the patient in front of you.
+#:
+#: A clinician working a case interrupts it constantly — "what's the first-line
+#: vasopressor again?" in the middle of collecting labs. Those turns must be
+#: answerable *without* disturbing the case, and the two failures that motivated
+#: this both came from treating them as case turns:
+#:
+#:   * a guideline question asked mid-counterfactual could not take the session
+#:     over (rightly — `SWITCH_CONFIDENCE` protects a half-collected case), so
+#:     it was answered as "which value should I change?"
+#:   * "how should severe hyperkalaemia be managed?" wrote `hyperkalaemia` as
+#:     the patient's diagnosis, contradicting the septic shock already on file,
+#:     and the reply asked the clinician which of the two their patient had.
+#:
+#: Both are correct behaviour applied to the wrong kind of turn. Marking the
+#: intent is what lets the orchestrator tell them apart.
+#:
+#: `drug_dosing` is deliberately absent. "Can I give full-dose enoxaparin?" is a
+#: question about this patient and needs their creatinine; treating it as
+#: general knowledge would cut it off from the case it depends on.
+KNOWLEDGE_INTENTS: frozenset = frozenset({
+    Intent.GUIDELINE_LOOKUP,
+    Intent.TERMINOLOGY,
+    Intent.CONDITION_INFORMATION,
+    Intent.GENERAL_EDUCATION,
+})
 
 
 #: Which intents are reachable in each mode. `EMERGENCY` appears in neither
@@ -207,7 +236,11 @@ _RULES: List[Tuple[Intent, _Rule]] = [
     # are how the question is actually asked; the phrasings above all require a
     # qualifier, so the models were never consulted and the turn was answered
     # from the guideline corpus instead.
-    _r(Intent.RISK_ASSESSMENT, r"\b(?:his|her|their|the patient'?s?|this patient'?s?)\s+risk\b", 0.50, "possessive risk"),
+    # The outcome may sit between the possessive and the noun: "her mortality
+    # risk", "his readmission risk". Requiring them adjacent meant the most
+    # natural phrasing of the commonest question this system answers scored on
+    # the outcome word alone, 0.50, and lost to a drug mentioned in passing.
+    _r(Intent.RISK_ASSESSMENT, r"\b(?:his|her|their|the patient'?s?|this patient'?s?)\s+(?:\w+\s+)?risks?\b", 0.50, "possessive risk"),
     _r(Intent.RISK_ASSESSMENT, r"\bwhat(?:'s| is| are)\s+(?:the\s+)?risks?\b", 0.45, "bare risk question"),
     _r(Intent.RISK_ASSESSMENT, r"\b(?:icu (?:admission|transfer)|length of stay|\blos\b)\b", 0.45, "outcome name"),
     _r(Intent.RISK_ASSESSMENT, r"\b(?:score (?:this|him|her|the patient)|run the model|what are (?:his|her|their) odds)\b", 0.55, "explicit scoring request"),
@@ -242,7 +275,14 @@ _RULES: List[Tuple[Intent, _Rule]] = [
     # with a creatinine of 3.2" is a drug question that mentions a lab value;
     # scored on the analyte alone it routed to lab interpretation and asked for
     # units and a reference range nobody was asking about.
-    _r(Intent.DRUG_DOSING, r"\b(?:vancomycin|vanc|cefepime|gentamicin|enoxaparin|heparin|piperacillin|meropenem|amikacin|tobramycin|colistin)\b", 0.55, "drug named"),
+    #
+    # Not when the drug is being *listed as current therapy*. "On vancomycin and
+    # norepinephrine" is part of a case description, not a dosing question, and
+    # this rule was strong enough to carry a whole case handover — labs, vitals,
+    # and an explicit "what is her mortality risk?" — into the drug-dosing path,
+    # where it was answered with retrieved guideline text and a complaint that no
+    # medication dose had been supplied. The models were never run.
+    _r(Intent.DRUG_DOSING, r"(?<!\bon )(?<!\breceiving )(?<!\btaking )(?<!\bgiven )(?<!\bgetting )(?<!\bstarted on )\b(?:vancomycin|vanc|cefepime|gentamicin|enoxaparin|heparin|piperacillin|meropenem|amikacin|tobramycin|colistin)\b", 0.55, "drug named"),
     _r(Intent.DRUG_DOSING, r"\b(?:worried|concerned) about\b", 0.20, "safety concern"),
     _r(Intent.DRUG_DOSING, r"\b(?:safe to (?:give|continue)|should i (?:hold|stop|continue))\b", 0.45, "drug decision"),
 
@@ -438,6 +478,26 @@ def resolve_intent(state: Any, message: str, mode: str = PATIENT) -> IntentResul
     if fresh.intent is not Intent.UNKNOWN and fresh.confidence >= SWITCH_CONFIDENCE:
         fresh.evidence.append(
             f"switched from {current.value} at confidence {fresh.confidence:.2f}")
+        return fresh
+
+    # An aside is not a switch, so it does not have to clear the switching bar.
+    #
+    # SWITCH_CONFIDENCE exists to stop a half-collected case being abandoned.
+    # A knowledge question abandons nothing: the orchestrator answers it against
+    # a scratch context and leaves `state.intent` where it was. Holding it to the
+    # same threshold made "how should severe hyperkalaemia be managed?" — asked
+    # during a counterfactual — come back as "which value should I change?",
+    # because the only two options were *take the session over* or *be read as
+    # the intent already running*. There was no third option for "answer this
+    # and carry on", which is most of what a clinician does mid-case.
+    #
+    # MIN_CONFIDENCE still applies: a weak signal falls through to the case, as
+    # before. What changes is only that a *confident* aside no longer needs to
+    # win an argument it was never having.
+    if fresh.intent in KNOWLEDGE_INTENTS and fresh.confidence >= MIN_CONFIDENCE:
+        fresh.evidence.append(
+            f"aside: answered as {fresh.intent.value} at confidence "
+            f"{fresh.confidence:.2f}; {current.value} remains the open case")
         return fresh
 
     return IntentResult(

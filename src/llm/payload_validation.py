@@ -115,16 +115,26 @@ PLAUSIBLE_RANGES: Dict[str, Tuple[float, float]] = {
     "vital_signs.temperature_max": (25.0, 45.0),
 }
 
-# alternate spellings accepted for each canonical lab key
+# Alternate spellings accepted for each canonical lab key.
+#
+# This table does double duty: `validate_payload` accepts these as keys, and
+# `src/assistant/extraction._lab_patterns` builds its deterministic matchers
+# from them, so a word added here is understood by both. That is the point of
+# having one table — but it also means an omission costs twice.
+#
+# `bicarb` was one such omission. It is how the value is written far more often
+# than "bicarbonate", and without it "bicarb 14" was read by the LLM extractor
+# and by nothing else. Whenever the model was unavailable — no key, rate limit,
+# a demo on a train — the turn refused for a value the clinician had supplied.
 _LAB_SYNONYMS = {
-    "creatinine_max": ("creatinine_max", "lab_creatinine_max", "creatinine", "cr_max", "scr_max"),
+    "creatinine_max": ("creatinine_max", "lab_creatinine_max", "creatinine", "cr_max", "cr", "scr_max", "scr"),
     "bun_max": ("bun_max", "lab_bun_max", "bun", "urea_max"),
     "wbc_max": ("wbc_max", "lab_wbc_max", "wbc", "leukocytes_max", "white_cell_count"),
-    "bicarbonate_min": ("bicarbonate_min", "lab_bicarbonate_min", "bicarbonate", "hco3_min", "co2_min"),
+    "bicarbonate_min": ("bicarbonate_min", "lab_bicarbonate_min", "bicarbonate", "bicarb", "hco3_min", "hco3", "co2_min"),
     "sodium_min": ("sodium_min", "lab_sodium_min", "sodium", "na_min"),
     "potassium_max": ("potassium_max", "lab_potassium_max", "potassium", "k_max"),
-    "platelets_min": ("platelets_min", "lab_platelets_min", "platelets", "plt_min"),
-    "hematocrit_min": ("hematocrit_min", "lab_hematocrit_min", "haematocrit_min", "hct_min"),
+    "platelets_min": ("platelets_min", "lab_platelets_min", "platelets", "plt_min", "plt"),
+    "hematocrit_min": ("hematocrit_min", "lab_hematocrit_min", "haematocrit_min", "hct_min", "hct"),
     "glucose_max": ("glucose_max", "lab_glucose_max", "glucose", "bg_max"),
     "anion_gap_max": ("anion_gap_max", "lab_anion_gap_max", "anion_gap", "ag_max"),
     "lactate_max": ("lactate_max", "lab_lactate_max", "lactate"),
@@ -155,7 +165,7 @@ class ValidationResult:
                 lines.append(f"  • {m['prompt']}{unit}")
         if self.implausible:
             lines.append("These values are outside physiologically possible ranges "
-                         "— please confirm or correct:")
+                         "and need confirming or correcting:")
             for m in self.implausible:
                 lines.append(f"  • {m['path']} = {m['value']} "
                              f"(expected {m['low']}–{m['high']})")
@@ -176,7 +186,7 @@ class ValidationResult:
                 )
             else:
                 lines.append(
-                    f"  • A recognisable primary diagnosis — {raw!r} did not map to any "
+                    f"  • A recognisable primary diagnosis. {raw!r} did not map to any "
                     "clinical concept I hold evidence for."
                 )
         return "\n".join(lines)

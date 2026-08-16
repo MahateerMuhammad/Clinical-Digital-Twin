@@ -60,6 +60,86 @@ class Question(BaseModel):
     level: str
 
 
+class Fact(BaseModel):
+    """A value the clinician stated, with the words it was read from.
+
+    The quote is the point (spec 13). A UI that shows "Age: 72" has told the
+    reader a number; one that shows it beside "72F septic shock" has told them
+    where it came from and lets them catch a misread before it reaches a model.
+    """
+
+    field: str
+    value: Any
+    quote: str
+    turn: int
+
+
+class TaskPrediction(BaseModel):
+    """One model output.
+
+    ``withheld`` is not an error. A task whose payload feature coverage falls
+    below the retention floor is named with its reason rather than scored badly,
+    and the UI is expected to render that as a first-class state — never a blank
+    cell and never a zero, both of which read as "no risk".
+    """
+
+    key: str
+    label: str
+    probability: Optional[float] = None
+    #: Before calibration. Shown only where the difference is instructive.
+    raw_probability: Optional[float] = None
+    withheld: bool = False
+    reason: str = ""
+
+
+class Driver(BaseModel):
+    """One SHAP attribution.
+
+    ``supplied`` is not decoration. A boosted tree routes a missing value down a
+    default branch, so absence carries weight: several of the largest
+    attributions on a typed payload are the model responding to what it was not
+    told. A UI that hides this reports "Number of coded diagnoses +0.77" as a
+    finding about the patient, which it is not.
+    """
+
+    feature: str
+    label: str
+    #: Signed, in log-odds. Positive raises the estimated risk.
+    contribution: float
+    value: Optional[float] = None
+    supplied: bool
+
+
+class Predictions(BaseModel):
+    """The model panel for one turn.
+
+    Confidence is a single label for the run, not a number per task — that is
+    what ``run_live_inference_with_uncertainty`` returns, and inventing a
+    per-task uncertainty here would be presenting a precision the models do not
+    have.
+    """
+
+    tasks: List[TaskPrediction] = []
+    risk_tier: str = ""
+    model_confidence: str = ""
+    calibration_statement: str = ""
+    input_kind: str = ""
+    #: What moved the mortality estimate. Empty when the explainer could not run;
+    #: the report says so rather than leaving the reader to notice the absence.
+    drivers: List[Driver] = []
+
+
+class Source(BaseModel):
+    """A retrieved document. ``tier`` is trust rank and is not decoration."""
+
+    doc_id: str
+    title: str
+    tier: int
+    url: str = ""
+    citation: str = ""
+    review_status: str = "unreviewed"
+
+
 class TurnResponse(BaseModel):
     """One assistant turn, as the UI needs it.
 
@@ -83,6 +163,19 @@ class TurnResponse(BaseModel):
     #: answer (a clarifying question is not something to verify).
     verified: Optional[bool] = None
     intent: Optional[str] = None
+    #: Everything the clinician has stated so far, each with its source span.
+    #: Cumulative rather than per-turn: a UI panel showing the case as it stands
+    #: would otherwise have to accumulate it and could drift from the context
+    #: the gate is actually reading.
+    facts: List[Fact] = []
+    #: Present when the turn ran the risk models; None otherwise. A guideline
+    #: lookup does not touch them, and an empty object would suggest it did and
+    #: found nothing.
+    predictions: Optional[Predictions] = None
+    #: The documents behind the answer. `citations` above is the rendered text;
+    #: this is the same evidence with its tier and link, so the UI can show what
+    #: a claim rests on rather than only that it was cited.
+    sources: List[Source] = []
     #: Present only when the server runs with CDT_ASSISTANT_DEBUG=1.
     debug: Optional[Dict[str, Any]] = None
 

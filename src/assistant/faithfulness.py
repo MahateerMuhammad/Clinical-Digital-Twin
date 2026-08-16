@@ -78,7 +78,7 @@ class FaithfulnessReport:
 
     def render(self) -> str:
         if self.ok:
-            return "FAITHFULNESS OK — all blocking checks passed."
+            return "FAITHFULNESS OK. All blocking checks passed."
         return "FAITHFULNESS FAILED:\n" + "\n".join(
             f"  [{c.number:2}] {c.name}: {c.detail}" for c in self.failures
             if c.blocking)

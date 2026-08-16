@@ -1,0 +1,28 @@
+.source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-3) 0;
+}
+
+.source + .source {
+  border-top: 1px solid var(--n-100);
+}
+
+.title {
+  font-size: var(--t-sm);
+  color: var(--n-900);
+  line-height: var(--lh-tight);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.link {
+  font-size: var(--t-xs);
+  color: var(--accent);
+}

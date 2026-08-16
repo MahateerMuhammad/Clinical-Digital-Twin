@@ -1,0 +1,39 @@
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-pill);
+  font-size: var(--t-xs);
+  font-weight: var(--w-label);
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+}
+
+/* Neutral is the default and covers most of the interface. Status colour is
+ * spent only where something is genuinely flagged — a page that colours
+ * everything has told the reader nothing. */
+.neutral {
+  background: var(--n-50);
+  color: var(--n-700);
+}
+
+.accent {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.ok {
+  background: var(--ok-weak);
+  color: var(--ok);
+}
+
+.warn {
+  background: var(--warn-weak);
+  color: var(--warn);
+}
+
+.danger {
+  background: var(--danger-weak);
+  color: var(--danger);
+}

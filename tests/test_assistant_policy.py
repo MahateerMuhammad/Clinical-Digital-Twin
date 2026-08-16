@@ -552,3 +552,218 @@ def test_the_boundaries_are_not_reachable_by_a_patient_session():
     """Mode scoping: these are clinician wordings and clinician boundaries."""
     assert Intent.RECORD_ACCESS not in MODE_INTENTS[PATIENT]
     assert Intent.DIAGNOSIS_REQUEST not in MODE_INTENTS[PATIENT]
+
+
+# ── asides: a question about medicine, not about this patient ────────────────
+
+def _clinician_bot():
+    from src.assistant.orchestrator import Assistant
+    return Assistant.clinician()
+
+
+def test_a_knowledge_question_does_not_take_over_an_open_case():
+    """
+    The interruption case.
+
+    A clinician mid-counterfactual asks "how is refractory hypotension managed?".
+    That must be answered *as* a guideline question while the counterfactual
+    stays the open case. Before this, the only two outcomes were seizing the
+    session or being read as the intent already running — which returned "which
+    value should I change?" to a guideline question.
+    """
+    st = ConversationState(session_id="s")
+    st.intent = Intent.COUNTERFACTUAL.value
+    st.turn = 3
+
+    res = resolve_intent(st, "In septic shock, how should refractory hypotension "
+                             "be managed when norepinephrine alone is insufficient?",
+                         mode=CLINICIAN)
+    assert res.intent is Intent.GUIDELINE_LOOKUP
+    assert any("aside" in e for e in res.evidence), res.evidence
+
+
+def test_an_aside_does_not_need_to_clear_the_switching_bar():
+    """
+    SWITCH_CONFIDENCE guards *abandoning* a case. An aside abandons nothing, so
+    holding it to that threshold was applying a rule to a situation it does not
+    describe. MIN_CONFIDENCE still applies.
+    """
+    st = ConversationState(session_id="s")
+    st.intent = Intent.RISK_ASSESSMENT.value
+    st.turn = 2
+
+    res = resolve_intent(st, "What does oliguric mean?", mode=CLINICIAN)
+    assert res.intent is Intent.TERMINOLOGY
+    assert res.confidence < SWITCH_CONFIDENCE or res.confidence >= MIN_CONFIDENCE
+
+
+def test_a_case_question_still_switches_normally():
+    """The guard this change must not weaken."""
+    st = ConversationState(session_id="s")
+    st.intent = Intent.GUIDELINE_LOOKUP.value
+    st.turn = 2
+
+    res = resolve_intent(st, "hmm", mode=CLINICIAN)
+    assert res.intent is Intent.GUIDELINE_LOOKUP, "a weak message must not switch"
+
+
+def test_an_aside_cannot_write_to_the_case():
+    """
+    The second half. "How should severe hyperkalaemia be managed?" used to write
+    `hyperkalaemia` as the patient's diagnosis, contradict the septic shock on
+    file, and ask the clinician which of the two their patient had.
+    """
+    bot = _clinician_bot()
+    sid = bot.start().state.session_id
+    bot.handle(sid, "72F septic shock, creatinine 3.2")
+    before = dict(bot.sessions[sid].context.to_dict()["current"])
+
+    bot.handle(sid, "How should severe hyperkalaemia with potassium above 6.5 "
+                    "be managed?")
+    after = bot.sessions[sid].context.to_dict()["current"]
+
+    assert after == before, "an aside changed the case"
+    assert after.get("primary_diagnosis") == "septic shock"
+    assert not bot.sessions[sid].context.contradictions
+
+
+def test_the_open_case_survives_an_aside():
+    """What makes resuming free: the case intent was never overwritten."""
+    bot = _clinician_bot()
+    sid = bot.start().state.session_id
+    bot.handle(sid, "72F septic shock, what is her mortality risk?")
+    open_case = bot.sessions[sid].intent
+
+    bot.handle(sid, "What is the first-line vasopressor in septic shock?")
+    assert bot.sessions[sid].intent == open_case
+
+
+# ── a case handover must reach the models ────────────────────────────────────
+
+def test_a_case_handover_naming_a_drug_is_still_a_risk_question():
+    """
+    A drug mentioned in passing must not capture the turn.
+
+    "88F with sepsis ... on vancomycin and norepinephrine. What is her mortality
+    risk?" classified as `drug_dosing` at 0.61, beating `risk_assessment` at
+    0.58 on the strength of one rule firing on the word "vancomycin". The models
+    were never run: the clinician got retrieved guideline text and a complaint
+    that no medication dose had been supplied, above a list of the five fields
+    drug-dosing happens to want.
+    """
+    from src.assistant.intents import CLINICIAN, Intent, classify
+
+    res = classify(
+        "88F with sepsis. Creatinine 3.2, BUN 61, WBC 18.4, bicarb 14. "
+        "On vancomycin and norepinephrine. What is her mortality risk?",
+        mode=CLINICIAN)
+    assert res.intent is Intent.RISK_ASSESSMENT, (
+        f"routed to {res.intent.value}; a case handover must reach the models")
+
+
+def test_a_drug_question_is_still_a_drug_question():
+    """The counterweight: the rule above exists for a reason and must survive."""
+    from src.assistant.intents import CLINICIAN, Intent, classify
+
+    for msg in ("Should I worry about vancomycin with a creatinine of 3.2?",
+                "How should I dose vancomycin in renal impairment?",
+                "Is it safe to continue enoxaparin with platelets of 42?"):
+        assert classify(msg, mode=CLINICIAN).intent is Intent.DRUG_DOSING, msg
+
+
+def test_the_outcome_word_may_sit_inside_the_possessive():
+    """"her mortality risk" scored on one rule; "her risk" scored on two."""
+    from src.assistant.intents import CLINICIAN, Intent, classify
+
+    for msg in ("What is her mortality risk?", "What is his readmission risk?",
+                "What are their ICU risks?"):
+        assert classify(msg, mode=CLINICIAN).intent is Intent.RISK_ASSESSMENT, msg
+
+
+def test_stated_medications_reach_the_payload():
+    """
+    `medication_name` has no payload path; `active_medications` does.
+
+    Nothing populated the second, so a clinician stating the patient's therapy
+    filled a field the models never see. The same turn could print "Medication
+    name: vancomycin" above "Not supplied: active medications", and the second
+    drug was discarded entirely.
+    """
+    from src.assistant import extraction as X
+    from src.assistant.state import PatientContext, build_payload
+
+    ctx = PatientContext()
+    res = X.extract("88F with sepsis, on vancomycin and norepinephrine.", ctx, 1)
+    assert not res.rejected, res.rejected
+    assert build_payload(ctx).get("active_medications") == [
+        "vancomycin", "norepinephrine"]
+
+
+def test_the_medication_quote_is_a_real_span():
+    """
+    Provenance survives the list.
+
+    `_quote_is_real` rejects anything that is not a verbatim span, so joining the
+    names into "vancomycin, norepinephrine" would have dropped the fact silently
+    however true it was.
+    """
+    from src.assistant import extraction as X
+    from src.assistant.state import PatientContext
+
+    msg = "88F with sepsis, on vancomycin and norepinephrine."
+    ctx = PatientContext()
+    res = X.extract(msg, ctx, 1)
+    quote = next(p.quote for p in res.accepted if p.field == "active_medications")
+    assert quote in msg, f"{quote!r} is not a span of the message"
+
+
+# ── a message that says nothing ──────────────────────────────────────────────
+
+def test_a_meaningless_message_is_not_answered_with_the_previous_answer():
+    """
+    "hmm" re-emitted the whole previous answer, word for word.
+
+    `resolve_intent` turns an unrecognised message back into the intent already
+    running, so the open case was recomputed from an unchanged context and
+    produced an identical reply. Correct for a reply that carries facts but no
+    keyword; wrong for a message that carries nothing.
+    """
+    bot = _clinician_bot()
+    sid = bot.start().state.session_id
+    first = bot.handle(sid, "72F septic shock, creatinine 3.2. "
+                            "What is her mortality risk?").reply
+
+    for msg in ("hmm", "akbflvhbalfb", "ok", "...", "   "):
+        reply = bot.handle(sid, msg).reply
+        assert reply != first, f"{msg!r} replayed the previous answer"
+        assert "could not understand" in reply.lower(), msg
+
+
+def test_a_meaningless_message_leaves_the_case_standing():
+    """Not understanding a message is not a reason to discard the patient."""
+    bot = _clinician_bot()
+    sid = bot.start().state.session_id
+    bot.handle(sid, "72F septic shock, creatinine 3.2. What is her mortality risk?")
+    before = dict(bot.sessions[sid].context.to_dict()["current"])
+    open_case = bot.sessions[sid].intent
+
+    bot.handle(sid, "hmm")
+
+    assert bot.sessions[sid].context.to_dict()["current"] == before
+    assert bot.sessions[sid].intent == open_case
+
+
+def test_a_reply_that_carries_facts_is_still_a_continuation():
+    """
+    The counterweight.
+
+    An open intent exists precisely to receive replies that match no intent
+    rule. Suppressing on classification alone would have swallowed them.
+    """
+    bot = _clinician_bot()
+    sid = bot.start().state.session_id
+    bot.handle(sid, "72F septic shock. What is her mortality risk?")
+
+    reply = bot.handle(sid, "her BUN is 54").reply
+    assert "could not understand" not in reply.lower()
+    assert bot.sessions[sid].context.get("bun_max") == 54.0

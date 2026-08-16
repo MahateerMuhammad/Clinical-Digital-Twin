@@ -55,7 +55,7 @@ class GuidelineRecord:
         return {
             "doc_id": self.doc_id,
             "citation": self.citation,
-            "title": f"{self.society} {self.document} ({self.year}) — {self.section}",
+            "title": f"{self.society} {self.document} ({self.year}): {self.section}",
             "category": "Clinical Practice Guideline (curated offline corpus)",
             "evidence_level": "Level 1: Clinical Practice Guidelines",
             "text": self.recommendation,
@@ -64,7 +64,7 @@ class GuidelineRecord:
             "verbatim": self.verbatim,
             "review_status": self.review_status,
             "corpus_version": CORPUS_VERSION,
-            "provenance": "paraphrased summary — verify against source document",
+            "provenance": "paraphrased summary; verify against source document",
         }
 
 

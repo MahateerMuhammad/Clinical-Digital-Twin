@@ -266,3 +266,183 @@ def test_the_assistant_is_configured_for_clinicians():
     assert service.assistant is not None
     assert service.assistant.mode == CLINICIAN
     assert service.assistant.triage_enabled is False
+
+
+# ── what the UI reads ────────────────────────────────────────────────────────
+#
+# These fields exist so a screen can render the case without re-deriving it from
+# markdown. Each assertion below is a promise the UI is built on; breaking one
+# silently would leave a panel blank rather than raise.
+
+def test_a_stated_fact_carries_the_words_it_came_from(client):
+    """
+    Spec 13 made visible. A panel showing "Age: 72" has told the reader a
+    number; showing it beside the span it was read from lets them catch a
+    misread before it reaches a model.
+    """
+    sid = client.post("/api/assistant/sessions").json()["session_id"]
+    body = client.post(f"/api/assistant/sessions/{sid}/messages",
+                       json={"message": "72F with septic shock"}).json()
+
+    assert body["facts"], "no facts extracted from a plain presentation line"
+    for fact in body["facts"]:
+        assert fact["quote"].strip(), f"{fact['field']} has no source quote"
+        assert fact["turn"] >= 1
+
+
+def test_facts_accumulate_rather_than_reporting_only_this_turn(client):
+    """
+    The panel shows the case as it stands, not the most recent sentence.
+
+    The opening message asks for risk on purpose. Extraction is scoped to the
+    fields the current intent needs (spec 15, minimum-necessary), so after a
+    *guideline* question a bare "creatinine 3.2" is correctly refused as not
+    needed for that request — which is the system working, and was this test's
+    original mistake rather than a defect.
+    """
+    sid = client.post("/api/assistant/sessions").json()["session_id"]
+    client.post(f"/api/assistant/sessions/{sid}/messages",
+                json={"message": "72F septic shock — what is her mortality risk?"})
+    body = client.post(f"/api/assistant/sessions/{sid}/messages",
+                       json={"message": "creatinine 3.2"}).json()
+
+    fields = {f["field"] for f in body["facts"]}
+    assert {"age", "creatinine_max"} <= fields, fields
+
+
+def test_a_guideline_answer_reports_the_documents_behind_it(client):
+    """`citations` is rendered text; `sources` is what the UI can link to."""
+    sid = client.post("/api/assistant/sessions").json()["session_id"]
+    body = client.post(f"/api/assistant/sessions/{sid}/messages",
+                       json={"message": "What is the first-line vasopressor "
+                                        "in septic shock?"}).json()
+
+    assert body["status"] == "answered"
+    assert body["sources"], "answered from evidence but reported no sources"
+    for src in body["sources"]:
+        assert src["title"] and src["doc_id"]
+        assert src["tier"] >= 1
+        # The corpus is unreviewed and the UI must be able to say so.
+        assert src["review_status"] in {"unreviewed", "clinician_reviewed"}
+
+
+def test_predictions_are_absent_rather_than_empty_when_no_model_ran(client):
+    """
+    An empty object would suggest the models ran and found nothing. A guideline
+    lookup never touches them.
+    """
+    sid = client.post("/api/assistant/sessions").json()["session_id"]
+    body = client.post(f"/api/assistant/sessions/{sid}/messages",
+                       json={"message": "What is the first-line vasopressor "
+                                        "in septic shock?"}).json()
+    assert body["predictions"] is None
+
+
+def test_the_evidence_route_publishes_the_corpus_and_its_limits(client):
+    """
+    Fifteen concepts, twenty-three records, none clinician-reviewed. A reader
+    who cannot see that discovers it by being refused, which reads as the system
+    being unhelpful rather than as the corpus being small.
+    """
+    body = client.get("/api/evidence").json()
+
+    assert body["stats"]["n_records"] == len(body["documents"])
+    assert body["stats"]["n_clinician_reviewed"] == 0
+    assert body["documents"] == sorted(
+        body["documents"], key=lambda d: (d["tier"], d["title"])), \
+        "documents must arrive ordered by trust, not by file order"
+    first = body["documents"][0]
+    assert {"doc_id", "title", "tier", "tier_name", "topics"} <= set(first)
+
+
+def test_the_deterministic_floor_reads_a_full_presentation_line():
+    """
+    No backend, no key, no quota — the values a clinician actually types must
+    still be read. This is the path every demo falls back to, and it broke on
+    "bicarb 14" because the shared synonym table listed only "bicarbonate".
+    """
+    from src.assistant.extraction import extract
+    from src.assistant.state import PatientContext
+
+    ctx = PatientContext()
+    extract("72F septic shock, Cr 3.2, BUN 48, WBC 19.4, bicarb 14, Na 131, "
+            "K 5.2, plt 88, hct 29, glucose 210, SBP 82, HR 118",
+            ctx, turn=1, backend=None)
+
+    for field in ("age", "sex", "creatinine_max", "bun_max", "wbc_max",
+                  "bicarbonate_min", "sodium_min", "potassium_max",
+                  "platelets_min", "hematocrit_min", "glucose_max",
+                  "sbp_min", "hr_max"):
+        assert ctx.get(field) is not None, f"{field} not read without a model"
+
+
+# ── SHAP drivers ─────────────────────────────────────────────────────────────
+
+def test_a_scored_case_reports_what_moved_the_estimate(client):
+    """
+    An explanation the report can print and the verifier will pass.
+
+    Attributions are the system's own arithmetic over its own model, so they
+    have to be registered as facts. They were not, and the grounding check
+    correctly withheld the entire report for quoting a number it had computed
+    itself — the same failure the medication relevance scores caused earlier.
+    """
+    sid = client.post("/api/assistant/sessions").json()["session_id"]
+    body = client.post(f"/api/assistant/sessions/{sid}/messages", json={"message":
+        "88F septic shock, Cr 3.2, BUN 48, WBC 19.4, bicarb 14, Na 131, K 5.2, "
+        "plt 88, hct 29, glucose 210, SBP 82, HR 118. Mortality risk?"}).json()
+
+    if body["status"] != "answered":
+        pytest.skip(f"models unavailable: {body['status']}")
+
+    assert body["verified"] is True, "drivers must not break grounding"
+    drivers = body["predictions"]["drivers"]
+    assert drivers, "a scored case reported no drivers"
+    assert len(drivers) <= 8
+
+    labels = [d["label"] for d in drivers]
+    assert any("Age" == l for l in labels), labels
+    # Ranked by absolute contribution, so the panel does not reorder per turn.
+    magnitudes = [abs(d["contribution"]) for d in drivers]
+    assert magnitudes == sorted(magnitudes, reverse=True)
+
+
+def test_a_driver_says_whether_the_value_was_supplied(client):
+    """
+    The distinction the panel is built on.
+
+    A boosted tree routes a missing value down a default branch, so absence
+    carries weight: on this payload several of the largest attributions are the
+    model responding to what it was not told. Without `supplied`, a UI renders
+    "Number of coded diagnoses +0.77" as a finding about the patient.
+    """
+    sid = client.post("/api/assistant/sessions").json()["session_id"]
+    body = client.post(f"/api/assistant/sessions/{sid}/messages", json={"message":
+        "88F septic shock, Cr 3.2, BUN 48, WBC 19.4, bicarb 14, Na 131, K 5.2, "
+        "plt 88, hct 29, glucose 210, SBP 82, HR 118. Mortality risk?"}).json()
+
+    if body["status"] != "answered":
+        pytest.skip(f"models unavailable: {body['status']}")
+
+    for d in body["predictions"]["drivers"]:
+        assert isinstance(d["supplied"], bool)
+        # A supplied driver carries the value the model saw; an unsupplied one
+        # carries None rather than a zero, which would read as a measurement.
+        assert (d["value"] is not None) == d["supplied"], d
+
+
+def test_the_report_explains_its_own_attributions(client):
+    """A signed number under a heading is not an explanation on its own."""
+    sid = client.post("/api/assistant/sessions").json()["session_id"]
+    body = client.post(f"/api/assistant/sessions/{sid}/messages", json={"message":
+        "88F septic shock, Cr 3.2, BUN 48, WBC 19.4, bicarb 14, Na 131, K 5.2, "
+        "plt 88, hct 29, glucose 210, SBP 82, HR 118. Mortality risk?"}).json()
+
+    if body["status"] != "answered":
+        pytest.skip(f"models unavailable: {body['status']}")
+
+    reply = body["reply"]
+    assert "Why the estimate landed where it did" in reply
+    assert "not measured in this patient" in reply, (
+        "the absence distinction must reach the reader")
+    assert "not causes" in reply

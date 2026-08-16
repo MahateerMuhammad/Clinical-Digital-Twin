@@ -1,0 +1,65 @@
+.body {
+  max-width: var(--measure);
+}
+
+.body > * + * {
+  margin-top: var(--s-3);
+}
+
+.heading {
+  font-size: var(--t-md);
+  font-weight: var(--w-heading);
+  color: var(--n-900);
+  margin-top: var(--s-5);
+}
+
+.heading:first-child {
+  margin-top: 0;
+}
+
+.para {
+  font-size: var(--t-md);
+  color: var(--n-700);
+}
+
+.list {
+  padding-left: var(--s-4);
+  color: var(--n-700);
+}
+
+.list li + li {
+  margin-top: var(--s-2);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+
+.table th {
+  text-align: left;
+  font-weight: var(--w-label);
+  color: var(--n-500);
+  padding: var(--s-2) var(--s-3) var(--s-2) 0;
+  border-bottom: 1px solid var(--n-100);
+}
+
+.table td {
+  padding: var(--s-2) var(--s-3) var(--s-2) 0;
+  border-bottom: 1px solid var(--n-100);
+  color: var(--n-700);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Numeric columns are right-aligned and monospaced so a column of
+ * probabilities can be compared down the page. */
+.table td:not(:first-child) {
+  font-family: var(--font-mono);
+}
+
+.cite {
+  font-style: normal;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}

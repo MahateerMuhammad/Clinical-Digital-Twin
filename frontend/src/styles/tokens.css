@@ -1,0 +1,132 @@
+/*
+ * tokens.css — the design system. The only file in the project permitted to
+ * contain a raw hex colour, a pixel value, or a font size.
+ *
+ * `scripts/check-tokens.mjs` enforces that. It is a grep, not a linter, and it
+ * is deliberately blunt: the failure mode being prevented is not "someone used
+ * a slightly wrong grey", it is a codebase where thirty components each own a
+ * private idea of what a card looks like and no change can be made in one
+ * place.
+ *
+ * Identity: clinical editorial. Warm paper, serif headings, sans body,
+ * monospaced numerics. The pairing is the commitment — it reads as a well-set
+ * clinical document rather than a product dashboard, and cannot drift into
+ * looking like an AI startup without changing this file.
+ */
+
+:root {
+  /* ── neutrals ─────────────────────────────────────────────────────────────
+   * Warm stone, never blue-grey. A cool grey plus a teal accent is the exact
+   * palette this project is trying not to be.
+   */
+  --n-0: #ffffff;      /* raised surface only — cards, modals */
+  --n-25: #faf9f7;     /* page background. Off-white, not stark */
+  --n-50: #f3f2ef;     /* sunken: table stripe, input rest, code block */
+  --n-100: #e8e6e1;    /* hairline dividers */
+  --n-300: #c9c5bd;    /* disabled text, empty chart track */
+  --n-500: #8a867e;    /* secondary text, labels */
+  --n-700: #4a4741;    /* body text */
+  --n-900: #23211f;    /* headings, primary numerals */
+
+  /* ── accent ───────────────────────────────────────────────────────────────
+   * One. Deep teal-green: present enough to mark what is interactive, quiet
+   * enough that a page of it never feels branded. Never a gradient, never a
+   * large fill.
+   */
+  --accent: #2d6a5f;
+  --accent-hover: #245349;
+  --accent-weak: #e7efec;
+
+  /* ── status ───────────────────────────────────────────────────────────────
+   * Desaturated on purpose. These read as information, not as an alarm, and
+   * they are reserved for genuinely flagged items — a system that colours
+   * everything has told the reader nothing.
+   */
+  --danger: #b4402f;
+  --danger-weak: #f7ebe8;
+  --warn: #a8762a;
+  --warn-weak: #f8f1e3;
+  --ok: #3f7a4e;
+  --ok-weak: #e9f1eb;
+
+  /* ── type ─────────────────────────────────────────────────────────────────
+   * Numerals are monospaced everywhere they can change, so a probability
+   * moving from 9.7% to 11.9% does not reflow the line it sits in.
+   */
+  --font-heading: "Source Serif 4", Georgia, serif;
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --t-xs: 0.75rem;    /* 12 — badge, caption */
+  --t-sm: 0.8125rem;  /* 13 — label, table cell */
+  --t-md: 0.875rem;   /* 14 — body */
+  --t-lg: 1rem;       /* 16 — lead */
+  --t-xl: 1.25rem;    /* 20 — card title */
+  --t-2xl: 1.625rem;  /* 26 — screen title */
+  --t-3xl: 2.125rem;  /* 34 — display */
+
+  /* Three weights. A fourth is always someone avoiding a hierarchy decision. */
+  --w-body: 400;
+  --w-label: 500;
+  --w-heading: 600;
+
+  --lh-tight: 1.25;
+  --lh-body: 1.6;
+
+  /* ── space ────────────────────────────────────────────────────────────────
+   * 4px base. Rhythm: --s-5 inside a card, --s-7 between cards. Generous by
+   * default; this interface is meant to feel unhurried.
+   */
+  --s-1: 0.25rem;   /* 4 */
+  --s-2: 0.5rem;    /* 8 */
+  --s-3: 0.75rem;   /* 12 */
+  --s-4: 1rem;      /* 16 */
+  --s-5: 1.5rem;    /* 24 */
+  --s-6: 2rem;      /* 32 */
+  --s-7: 3rem;      /* 48 */
+  --s-8: 4rem;      /* 64 */
+
+  /* ── radius ───────────────────────────────────────────────────────────────
+   * One rule, no exceptions: every surface and control is --r; anything
+   * pill-shaped is --r-pill. Mixed radii are the fastest way to make a set of
+   * components look like they came from different products.
+   */
+  --r: 8px;
+  --r-pill: 999px;
+
+  /* ── elevation ────────────────────────────────────────────────────────────
+   * Two depths, both soft. Borders are used only as hairlines inside tables —
+   * separation comes from shadow and whitespace.
+   */
+  --sh-sm: 0 1px 2px rgb(35 33 31 / 4%), 0 1px 3px rgb(35 33 31 / 5%);
+  --sh-md: 0 2px 8px rgb(35 33 31 / 6%), 0 8px 24px rgb(35 33 31 / 6%);
+
+  /* ── texture ──────────────────────────────────────────────────────────────
+   * How absent data looks. One decision, in one place: any component drawing a
+   * quantity the clinician did not supply uses this, so "supplied" and "the
+   * model inferred from an absence" never look alike in two different ways.
+   * The stripe geometry is the pattern itself, not a spacing choice.
+   */
+  --hatch-missing: repeating-linear-gradient(
+    45deg,
+    var(--n-300),
+    var(--n-300) 2px,
+    var(--n-50) 2px,
+    var(--n-50) 4px
+  );
+
+  /* ── motion ───────────────────────────────────────────────────────────────*/
+  --dur: 120ms;
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* ── layout ───────────────────────────────────────────────────────────────*/
+  --sidebar-w: 232px;
+  --panel-w: 360px;   /* the case panel — wide enough for a quote line */
+  --measure: 68ch;  /* readable line length for composed clinical prose */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 0ms;
+  }
+}

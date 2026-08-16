@@ -128,14 +128,31 @@ def tier_for_probability(p: float) -> str:
     return _TIER_NAMES[-1]
 
 
-TASK_LABELS = {
-    "p_mortality": "In-hospital mortality",
-    "p_readmission": "30-day readmission",
-    "p_icu_admission": "ICU admission during this stay",
-    "p_los_over_5_63d": "Hospital stay beyond 5.63 days",
-    "p_deterioration": ("ICU transfer within 48 hours "
-                        "(assessed at 24 hours, patient stable to that point)"),
+#: Plain-language restatement of TIER_CONTEXT, derived from the same constants so
+#: the two cannot drift. TIER_CONTEXT reads as a metric ("observed in-hospital
+#: mortality 3.79% in this band on the held-out test cohort"); this reads as a
+#: sentence a clinician can take in at a glance, which is what the headline needs.
+TIER_PLAIN = {
+    name: (f"{SYSTEM_CONSTANTS[f'phase9_tier{i}_observed_mortality_pct']}% of the "
+           f"patients this model placed in the same band died in hospital")
+    for i, name in enumerate(_TIER_NAMES, start=1)
 }
+
+TASK_LABELS = {
+    "p_mortality": "Dies in hospital during this admission",
+    "p_readmission": "Readmitted within 30 days of discharge",
+    "p_icu_admission": "Moves to ICU at some point this stay",
+    "p_los_over_5_63d": "Stays in hospital longer than 5.63 days",
+    "p_deterioration": "Moves to ICU within the next 48 hours",
+}
+
+#: The one outcome whose definition cannot be carried by its label. Phase 5 is a
+#: landmark model: it speaks only about patients who have already been stable for
+#: a day, and read without that the number describes a different patient.
+_DETERIORATION_NOTE = (
+    "\"Moves to ICU within the next 48 hours\" is assessed at the 24-hour mark and "
+    "applies only to a patient who has been stable up to that point."
+)
 
 
 @dataclass
@@ -145,9 +162,13 @@ class ComposedReport:
     warnings: List[str] = field(default_factory=list)
 
     def to_markdown(self) -> str:
+        # Answer first, then why, then what the literature says, then the caveats,
+        # then the machinery. The previous order opened with a restatement of the
+        # values the clinician had typed seconds earlier and put the guideline text
+        # — the only actionable content — fourth of eight.
         order = [
-            "header", "presentation", "risk", "evidence",
-            "medications", "uncertainty", "limitations", "provenance",
+            "header", "headline", "risk", "drivers", "evidence",
+            "medications", "limits", "appendix",
         ]
         out: List[str] = []
         for key in order:
@@ -156,8 +177,91 @@ class ComposedReport:
         return "\n\n".join(out) + "\n"
 
 
+#: The title `rag_corpus` gives a record it retrieved but could not authenticate.
+#: Matched on the title because that is the only field the placeholder shares
+#: across the three places it is constructed.
+_INTEGRITY_FAILED = "Citation Integrity Check Failed"
+
+#: Below this, a calibrated probability renders as "0.0%".
+_NEAR_ZERO = 0.0005
+
+
 def _fmt_pct(p: Optional[float]) -> str:
-    return "not computed" if p is None else f"{100.0 * float(p):.1f}%"
+    """
+    A percentage, or a phrase when the number would round to zero.
+
+    ``0.0%`` is not a small probability, it is a claim of impossibility, and the
+    48-hour deterioration model produces one routinely on a presentation payload
+    (a raw score around 7e-07 against a 2.19% base rate in the training cohort).
+    Printed in a table beside three real percentages, a clinician reads it as
+    "this will not happen". The phrase carries no digits, so it states the
+    resolution limit without asserting a rate the system cannot support.
+
+    This is a display fix and not the underlying one: an estimate three orders of
+    magnitude below the base rate is a calibration problem, and it stays open.
+    """
+    if p is None:
+        return "not computed"
+    p = float(p)
+    return "near zero" if 0 <= p < _NEAR_ZERO else f"{100.0 * p:.1f}%"
+
+
+def _plain_sex(sex: Any) -> str:
+    """``F`` is a database code, not a word. A report said "Sex: f"."""
+    s = str(sex or "").strip()
+    return {"f": "female", "m": "male", "female": "female",
+            "male": "male"}.get(s.lower(), s)
+
+
+def _strength(magnitude: float, largest: float) -> str:
+    """
+    How hard a driver pushed, relative to the hardest one in the same report.
+
+    A SHAP value is in log-odds. "+0.770" is not a quantity a reader converts in
+    their head, and printing it in the body invited exactly one interpretation —
+    that a bigger number is a bigger clinical problem. The ranking is the part
+    that carries meaning to a clinician, so the body carries the ranking and the
+    appendix keeps the arithmetic.
+    """
+    if largest <= 0:
+        return "slight"
+    ratio = magnitude / largest
+    return "strong" if ratio >= 0.6 else "moderate" if ratio >= 0.25 else "slight"
+
+
+def _driver_phrase(d: dict) -> str:
+    """``Creatinine, peak 3.2``: the label and the value the model saw."""
+    from src.llm.drivers import is_indicator
+
+    label = str(d.get("label") or d.get("feature") or "")
+    value = d.get("value")
+    if not d.get("supplied") or value is None or is_indicator(str(d.get("feature", ""))):
+        return label
+    try:
+        return f"{label} {float(value):g}"
+    except (TypeError, ValueError):
+        return label
+
+
+_TWIN_PHRASES = {
+    "ok": "",
+    "not_attempted": "not attempted for this case",
+    "no_cohort_data": "the historical cohort is not loaded",
+    "cohort_embeddings_missing": "the historical cohort is not indexed",
+}
+
+
+def _twin_phrase(status: str) -> str:
+    """
+    A clinician-readable reason, never an exception string.
+
+    ``projection_unavailable: No module named 'src.models.twin_projection'``
+    was being printed verbatim inside a clinical report.
+    """
+    s = str(status or "").strip()
+    if s in _TWIN_PHRASES:
+        return _TWIN_PHRASES[s]
+    return "unavailable in this deployment"
 
 
 def _lab_line(labs: Dict[str, Any], key: str, label: str, unit: str) -> Optional[str]:
@@ -193,21 +297,32 @@ def compose_report(
         dx_display = validation["diagnosis"].get("display") or ""
     dx_raw = str(payload.get("primary_diagnosis", "")).strip()
 
-    # ── 1. header ────────────────────────────────────────────────────────
+    # ── header ───────────────────────────────────────────────────────────
     age = demo.get("age")
     sex = demo.get("gender")
     who = []
     if age is not None:
+        # Extraction yields a float, and "88.0-year-old" is how a spreadsheet
+        # writes an age, not how anyone says one.
+        try:
+            age = int(age) if float(age).is_integer() else age
+        except (TypeError, ValueError):
+            pass
         who.append(f"{age}-year-old")
     if sex:
-        who.append(str(sex))
+        who.append(_plain_sex(sex))
     rep.sections["header"] = (
-        "# Clinical Decision Support Summary\n\n"
-        f"**Presentation:** {' '.join(who) or 'patient'} — {dx_raw or 'diagnosis not stated'}"
-        + (f"  \n**Mapped concept:** {dx_display}" if dx_display else "")
+        "# Risk summary\n\n"
+        f"{' '.join(who) or 'Patient'}, {dx_raw or 'diagnosis not stated'}."
+        + (f" Coded as: {dx_display}." if dx_display else "")
     )
 
-    # ── 2. presentation ──────────────────────────────────────────────────
+    # ── the values supplied ──────────────────────────────────────────────
+    #
+    # Collected here, printed in the appendix. Restating them at the top made the
+    # first thing a clinician read a list of what they had typed a minute earlier,
+    # ahead of the answer they asked for. They are still worth printing — it is how
+    # a misread value gets caught — just not first.
     obs: List[str] = []
     for key, label, unit in [
         ("creatinine_max", "peak creatinine", "mg/dL"),
@@ -231,147 +346,320 @@ def compose_report(
             except (TypeError, ValueError):
                 pass
 
-    rep.sections["presentation"] = (
-        "## 1. Observed values (as supplied)\n\n"
-        + ("\n".join(f"- {o}" for o in obs) if obs else "- No laboratory or vital values supplied.")
-        + "\n\nThese are the values provided as input; they are restated here without "
-          "interpretation beyond the model outputs below."
+    observed_block = (
+        "**Values used**\n\n"
+        + ("\n".join(f"- {o}" for o in obs) if obs
+           else "- No laboratory or vital values were supplied.")
     )
 
-    # ── 3. risk ──────────────────────────────────────────────────────────
+    # ── the headline ─────────────────────────────────────────────────────
+    #
+    # One number, its band, and what that band did historically. A probability
+    # with nothing to compare it against is not interpretable: told "14.3%", a
+    # reader has no way to know whether that is unremarkable or alarming, and the
+    # tier rate is the only anchor this system has actually measured.
     tier = predictions.get("risk_tier")
+    p_mort = predictions.get("p_mortality")
+    withheld_tasks = predictions.get("withheld_tasks") or {}
+
+    if p_mort is not None:
+        head = [f"**Estimated risk of dying in hospital during this admission: "
+                f"{_fmt_pct(p_mort)}.**"]
+        if tier:
+            plain = TIER_PLAIN.get(str(tier))
+            head.append(f"That is **{tier}**."
+                        + (f" Across the held-out test cohort, {plain}." if plain else ""))
+        rep.sections["headline"] = "\n\n".join(head)
+    elif predictions.get("withheld_reason") or withheld_tasks:
+        rep.sections["headline"] = (
+            "**No mortality estimate is being reported for this patient.** The "
+            "models ran, but their output was judged unreliable on the values "
+            "available here and has been withheld rather than shown. The reason "
+            "is in the appendix."
+        )
+
+    # ── what the models estimate ─────────────────────────────────────────
+    #
     # Withholding is per task, not all-or-nothing. A presentation payload supports
     # mortality well enough to serve and the other four not at all, so a single
     # verdict over the whole table would either publish four unreliable figures or
     # suppress the one that works.
-    withheld_tasks = predictions.get("withheld_tasks") or {}
-    rows = ["| Task | Calibrated probability |", "| :--- | ---: |"]
+    #
+    # The *reason* for a withheld task used to be printed inline: "a presentation
+    # payload supports AUROC 0.731 for this task against 0.900 from the full
+    # admission record, 57% of the validated discrimination, below the 67% floor".
+    # That is the correct reason stated in the wrong language — the reader's
+    # question is whether they may use the number, not how the audit was scored.
+    # The verdict stays here; the audit moves to the appendix, in full.
+    rows = ["| Outcome | Estimate |", "| :--- | ---: |"]
     for key, label in TASK_LABELS.items():
         if key in withheld_tasks:
-            rows.append(f"| {label} | withheld — {withheld_tasks[key]} |")
-        elif key in predictions:
+            rows.append(f"| {label} | not reported |")
+        elif key in predictions and predictions.get(key) is not None:
             rows.append(f"| {label} | {_fmt_pct(predictions.get(key))} |")
+    risk_lines: List[str] = []
     if len(rows) > 2:
-        risk_body = "\n".join(rows)
+        risk_lines.append("\n".join(rows))
     elif predictions.get("withheld_reason"):
-        # "Not supplied" was wrong and materially so: the pipeline *computed* these
-        # and then withheld them because the payload populated too few of the trained
-        # features. A reader told nothing was supplied would reasonably assume the
-        # models had not been run, rather than that their output was judged
-        # unreliable for this input.
-        risk_body = (f"_Model predictions withheld: "
-                     f"{predictions['withheld_reason']}._")
+        risk_lines.append("No estimate is being reported. See the appendix for why.")
     else:
-        risk_body = "_No model predictions were supplied._"
+        risk_lines.append("No model predictions were supplied.")
 
-    tier_line = ""
-    if tier:
-        ctx = TIER_CONTEXT.get(str(tier))
-        tier_line = f"\n\n**Risk tier:** {tier}"
-        if ctx:
-            tier_line += f" — {ctx}."
+    if any(k in withheld_tasks for k in TASK_LABELS):
+        risk_lines.append(
+            "*Not reported* means the model was run and its answer withheld: on "
+            "the values available here it does not separate patients well enough "
+            "to be quoted. It does not mean the risk is low, and it does not mean "
+            "nothing was supplied.")
+    if any(0 <= float(predictions[k]) < _NEAR_ZERO
+           for k in TASK_LABELS
+           if isinstance(predictions.get(k), (int, float))):
+        risk_lines.append(
+            "*Near zero* means the estimate fell below the smallest rate this "
+            "table reports. Read it as no signal in the values supplied, not as "
+            "an assurance the outcome will not happen.")
+    if "p_deterioration" in predictions and predictions.get("p_deterioration") is not None:
+        risk_lines.append(f"*{_DETERIORATION_NOTE}*")
+
     coverage = predictions.get("feature_coverage")
-    cov_line = ""
     if coverage is not None:
         try:
-            cov_line = (f"\n\n**Model input coverage:** {100.0 * float(coverage):.0f}% of the "
-                        "features these models were trained on were supplied.")
+            pct = 100.0 * float(coverage)
+            risk_lines.append(
+                f"These models were built on the full admission record. This case "
+                f"supplies {pct:.0f}% of what they expect"
+                + (", so treat the estimates as indicative rather than precise."
+                   if pct < 60 else "."))
         except (TypeError, ValueError):
             pass
 
-    rep.sections["risk"] = "## 2. Model risk estimates\n\n" + risk_body + tier_line + cov_line
+    rep.sections["risk"] = ("## What the models estimate\n\n"
+                            + "\n\n".join(risk_lines))
 
-    # ── 4. evidence ──────────────────────────────────────────────────────
+    # ── why the estimate landed there ────────────────────────────────────
+    #
+    # SHAP, told as an explanation rather than as a metric.
+    #
+    # The table this replaced printed eight rows of signed log-odds — "Number of
+    # coded diagnoses | +0.770 | not supplied" — under a heading promising an
+    # explanation. Everything in it was true and almost none of it was legible:
+    # a clinician cannot convert log-odds, cannot rank two features by a unit
+    # they do not use, and reads "+0.770" beside a feature name as a finding
+    # about the patient.
+    #
+    # What actually carries meaning is direction, order, and whether the model
+    # was reacting to a value or to its absence. A boosted tree routes a missing
+    # value down a default branch, so absence carries real weight; on a
+    # presentation payload most features are unsupplied, and several of the
+    # largest attributions are the model responding to what it was never told.
+    # Those are separated out rather than mixed in, because a reader who takes
+    # them for patient findings has been misled by a section built to prevent
+    # exactly that. The arithmetic is not discarded — it moves to the appendix,
+    # where an auditor can still check it.
+    drivers = [d for d in (predictions.get("drivers") or [])
+               if isinstance(d, dict) and d.get("contribution") is not None]
+    if drivers:
+        largest = max(abs(float(d["contribution"])) for d in drivers)
+        up, down, absent = [], [], []
+        for d in drivers:
+            c = float(d["contribution"])
+            strength = _strength(abs(c), largest)
+            if not d.get("supplied"):
+                absent.append(f"- {_driver_phrase(d)}")
+            elif c >= 0:
+                up.append(f"- {_driver_phrase(d)} *({strength})*")
+            else:
+                down.append(f"- {_driver_phrase(d)} *({strength})*")
+
+        body: List[str] = [
+            "The mortality model weighed the inputs below most heavily. "
+            "*Strong*, *moderate* and *slight* rank them against each other for "
+            "this patient; they are not clinical severity."
+        ]
+        if up:
+            body.append("**Raised the estimate**\n\n" + "\n".join(up))
+        if down:
+            body.append("**Lowered the estimate**\n\n" + "\n".join(down))
+        if absent:
+            body.append(
+                "**Counted, but not measured in this patient**\n\n"
+                + "\n".join(absent)
+                + "\n\nThese were not supplied. The model still gives absence "
+                  "weight, because an unrecorded value is itself a pattern in "
+                  "the training data, so they moved the estimate without saying "
+                  "anything about this patient. Where you can supply one, the "
+                  "estimate becomes better founded.")
+        body.append(
+            "This is how the model weighed its input. It is not why the patient "
+            "is unwell: these are associations learned from past admissions, not "
+            "causes, and changing one of them would not by itself change the "
+            "outcome.")
+        rep.sections["drivers"] = ("## Why the estimate landed where it did\n\n"
+                                   + "\n\n".join(body))
+    elif predictions.get("p_mortality") is not None:
+        # Silence here would be indistinguishable from "nothing mattered".
+        rep.sections["drivers"] = (
+            "## Why the estimate landed where it did\n\n"
+            "Not available for this case. The explanation needs the mortality "
+            "model and its attribution library loaded together; one of them was "
+            "not, so no drivers are reported rather than guessed at."
+        )
+
+    # ── what the guidelines say ──────────────────────────────────────────
+    #
+    # Text first, citation after. Grouping by evidence level put a grading label
+    # above the content and made the section read as a bibliography; a clinician
+    # wants the recommendation, then the provenance to judge it by. The level is
+    # still shown, on the line where it is used.
+    #
+    # A record whose citation identity failed verification is a system event, not
+    # a guideline. It was being rendered in place among the real ones, headed
+    # "Citation Integrity Check Failed" and quoting itself — so the clinical
+    # section carried an internal error message styled exactly like clinical
+    # advice. It is reported, but in the appendix, where system state belongs.
+    unverified = [d for d in documents
+                  if str(d.get("title", "")).strip() == _INTEGRITY_FAILED]
+    documents = [d for d in documents
+                 if str(d.get("title", "")).strip() != _INTEGRITY_FAILED]
+
     ev_lines: List[str] = []
-    by_level: Dict[str, List[dict]] = {}
     for d in documents:
-        by_level.setdefault(str(d.get("evidence_level", "Unclassified")), []).append(d)
-
-    for level in sorted(by_level):
-        ev_lines.append(f"\n**{level}**\n")
-        for d in by_level[level]:
-            cit = d.get("citation", "")
-            title = d.get("title", "")
-            text = str(d.get("text", "")).strip()
-            snippet = (text[:400] + "…") if len(text) > 400 else text
-            ev_lines.append(f"- {cit} {title}")
-            if snippet:
-                ev_lines.append(f"  > {snippet}")
-            if d.get("url"):
-                ev_lines.append(f"  Source: {d['url']}")
-            if d.get("provenance"):
-                ev_lines.append(f"  _{d['provenance']}_")
-            if cit:
-                rep.citations_used.append(str(cit))
+        cit = str(d.get("citation", "") or "")
+        title = str(d.get("title", "") or "")
+        level = str(d.get("evidence_level", "") or "")
+        text = str(d.get("text", "")).strip()
+        snippet = (text[:400] + "…") if len(text) > 400 else text
+        ev_lines.append(f"**{title or cit or 'Untitled record'}**")
+        if snippet:
+            ev_lines.append(f"> {snippet}")
+        tail = [x for x in (cit, level) if x]
+        if d.get("url"):
+            tail.append(str(d["url"]))
+        if d.get("provenance"):
+            tail.append(str(d["provenance"]))
+        if tail:
+            ev_lines.append("*" + " · ".join(tail) + "*")
+        if cit:
+            rep.citations_used.append(cit)
 
     if not documents:
-        ev_lines.append("_No evidence documents were retrieved._")
+        ev_lines.append("No guideline records were retrieved for this case.")
         if retrieval_status != "ok":
-            ev_lines.append(f"_Retrieval status: {retrieval_status}._")
+            ev_lines.append("Nothing was retrieved because the evidence search "
+                            "did not complete; see the appendix.")
 
-    rep.sections["evidence"] = "## 3. Retrieved evidence\n" + "\n".join(ev_lines)
+    rep.sections["evidence"] = ("## What the guidelines say\n\n"
+                                + "\n\n".join(ev_lines))
 
-    # ── 5. medications ───────────────────────────────────────────────────
+    # ── medications ──────────────────────────────────────────────────────
+    #
+    # Rendered only when there are any. A standing "_No active medications
+    # supplied._" gave an empty section the same weight as a full one, and a
+    # report of mostly-absent sections is what made this read as a debug dump.
+    #
+    # The numeric relevance score is dropped from the body: `relevance 0.62` is
+    # an internal ranking weight with no external meaning, and a reader has no
+    # way to know whether 0.62 is a lot. The ordering it produces is the part
+    # that is worth showing; the score itself is in the appendix.
     med_lines: List[str] = []
     for m in ranked_medications or []:
         if not m.get("recognised"):
             med_lines.append(
-                f"- **{m.get('raw')}** — not recognised; no evidence retrieved for it."
-            )
+                f"- **{m.get('raw')}**: not recognised, so nothing was retrieved "
+                f"about it. Check the spelling if it matters here.")
             rep.warnings.append(f"unrecognised medication: {m.get('raw')}")
             continue
         med_lines.append(
-            f"- **{m.get('ingredient')}** ({m.get('drug_class') or 'unclassified'}) — "
-            f"relevance {m.get('score')}: {m.get('rationale')}"
-        )
-    rep.sections["medications"] = (
-        "## 4. Active medications, by mechanistic relevance\n\n"
-        + ("\n".join(med_lines) if med_lines else "_No active medications supplied._")
-        + "\n\nRelevance reflects the link between drug class and the stated presentation. "
-          "It is not a recommendation to start, stop or change any therapy."
-    )
+            f"- **{m.get('ingredient')}** ({m.get('drug_class') or 'class not classified'})"
+            f": {m.get('rationale')}")
+    if med_lines:
+        rep.sections["medications"] = (
+            "## Medications on the list\n\n"
+            + "\n".join(med_lines)
+            + "\n\nOrdered by how closely the drug class relates to the stated "
+              "presentation. This is not a recommendation to start, stop or "
+              "change any therapy.")
 
-    # ── 6. uncertainty ───────────────────────────────────────────────────
-    unc = [
-        "- Probabilities are calibrated estimates from models trained on MIMIC-IV; "
-        "they describe populations, not individual certainty.",
-        "- No causal claim is made. These models identify association, not treatment effect.",
+    # ── what this cannot tell you ────────────────────────────────────────
+    #
+    # One section, not three. "Association, not treatment effect" previously
+    # appeared in four separate places plus the trailing disclaimer; a caveat
+    # repeated five times teaches the reader to skip the region it lives in.
+    limits = [
+        "- These are population estimates from models trained on one US hospital "
+        "system's records. They describe patients who resembled this one, not "
+        "this patient.",
+        "- Nothing here is causal. The models found associations; none of it "
+        "supports the claim that changing an input would change the outcome.",
+        "- The guideline text is a paraphrased summary awaiting clinician "
+        "review. Check the wording against the cited source before acting on it.",
+        "- This is a summary of supplied values, model output and retrieved "
+        "text. It is not a clinical assessment and does not replace one.",
     ]
-    if coverage is not None:
-        try:
-            if float(coverage) < 0.6:
-                unc.append(
-                    f"- **Input coverage is low ({100.0 * float(coverage):.0f}%).** Unsupplied "
-                    "features were treated as missing; estimates are correspondingly less reliable."
-                )
-        except (TypeError, ValueError):
-            pass
-    if twin_status and twin_status != "ok":
-        unc.append(f"- Historical twin evidence unavailable ({twin_status}); "
-                   "no similar-patient comparison is included.")
+    twin_note = _twin_phrase(twin_status) if twin_status and twin_status != "ok" else ""
+    if twin_note:
+        limits.append(f"- No comparison with similar past patients is included: "
+                      f"{twin_note}.")
+    if retrieval_errors:
+        limits.append("- The evidence search did not fully complete, so the "
+                      "guideline section may be incomplete.")
+    rep.sections["limits"] = "## What this cannot tell you\n\n" + "\n".join(limits)
+
+    # ── appendix ─────────────────────────────────────────────────────────
+    #
+    # Everything an auditor needs and a clinician does not read first: the values
+    # as received, the attribution arithmetic, the withholding audit in its own
+    # units, and the retrieval trace. Kept in the report rather than deleted —
+    # the numbers are the defensible part — but below the clinical content
+    # instead of interleaved with it.
+    appendix: List[str] = [observed_block]
+
+    if drivers:
+        rows = ["| Feature | SHAP (log-odds) | Value seen |", "| :--- | ---: | :--- |"]
+        for d in drivers:
+            v = (f"{float(d['value']):g}" if d.get("supplied") and d.get("value") is not None
+                 else "not supplied")
+            rows.append(f"| {d.get('label')} | {float(d['contribution']):+.3f} | {v} |")
+        appendix.append(
+            "**Attribution detail**\n\n" + "\n".join(rows)
+            + "\n\nLocal SHAP values for the in-hospital mortality model, in "
+              "log-odds. Positive raises the estimate.")
+
+    if withheld_tasks:
+        appendix.append(
+            "**Why an outcome was not reported**\n\n"
+            + "\n".join(f"- {TASK_LABELS.get(k, k)}: {v}"
+                        for k, v in withheld_tasks.items()))
+    elif predictions.get("withheld_reason"):
+        appendix.append("**Why no estimate was reported**\n\n"
+                        f"- {predictions['withheld_reason']}")
+
+    if ranked_medications:
+        scored = [f"- {m.get('ingredient') or m.get('raw')}: {m.get('score')}"
+                  for m in ranked_medications if m.get("recognised")]
+        if scored:
+            appendix.append("**Medication relevance scores**\n\n" + "\n".join(scored))
+
+    if unverified:
+        appendix.append(
+            "**Records retrieved but not shown**\n\n"
+            + "\n".join(f"- {d.get('citation') or d.get('doc_id')}"
+                        for d in unverified)
+            + "\n\nThe stored identity of these records did not match the "
+              "citation they carry, so their text was not used.")
+
+    trace = [f"- Guideline records cited: {len(rep.citations_used)}",
+             f"- Evidence search: {'completed' if retrieval_status == 'ok' else retrieval_status}",
+             f"- Similar-patient comparison: "
+             f"{'included' if twin_status == 'ok' else _twin_phrase(twin_status)}"]
     for err in (retrieval_errors or []):
-        unc.append(f"- Evidence retrieval issue: {err}")
-    rep.sections["uncertainty"] = "## 5. Uncertainty and confidence\n\n" + "\n".join(unc)
+        trace.append(f"- Evidence search issue: {err}")
+    trace.append("- Composed deterministically from structured input. Every number "
+                 "above traces to the supplied values, the model output or a cited "
+                 "record; anything that did not would have been withheld.")
+    appendix.append("**How this was produced**\n\n" + "\n".join(trace))
 
-    # ── 7. limitations ───────────────────────────────────────────────────
-    rep.sections["limitations"] = (
-        "## 6. Limitations\n\n"
-        "- This summary restates supplied values, model outputs and retrieved guideline text. "
-        "It does not constitute a clinical assessment.\n"
-        "- Guideline records are paraphrased summaries pending clinician review; verify wording "
-        "against the cited source before acting.\n"
-        "- Model estimates derive from a single-centre US ICU/hospital dataset and may not "
-        "transfer to other populations or care settings."
-    )
-
-    # ── 8. provenance ────────────────────────────────────────────────────
-    rep.sections["provenance"] = (
-        "## 7. Provenance\n\n"
-        f"- Evidence documents cited: {len(rep.citations_used)}\n"
-        f"- Retrieval status: {retrieval_status}\n"
-        f"- Twin retrieval: {twin_status or 'not attempted'}\n"
-        "- Generated deterministically from structured inputs; every number above appears "
-        "in the payload, the model outputs, or a cited document."
-    )
+    rep.sections["appendix"] = ("## Appendix: how this was produced\n\n"
+                                + "\n\n".join(appendix))
 
     return rep

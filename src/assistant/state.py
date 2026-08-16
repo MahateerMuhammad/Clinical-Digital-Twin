@@ -112,13 +112,13 @@ FIELDS: Dict[str, FieldSpec] = {s.name: s for s in (
        "How bad is it right now, on a scale of 1 to 10?", bounds=(0.0, 10.0)),
     _f("symptom_location", SCALAR, "Where in your body do you feel it?"),
     _f("symptom_character", SCALAR,
-       "How would you describe it — sharp, dull, burning, pressure, or something else?"),
+       "How would you describe it: sharp, dull, burning, pressure, or something else?"),
     _f("symptom_frequency", SCALAR, "Does it come and go, or is it constant?"),
     _f("symptom_trajectory", SCALAR,
        "Is it getting better, getting worse, or staying about the same?"),
     _f("associated_symptoms", LIST, "Are you having any other symptoms alongside it?"),
     _f("recent_events", LIST,
-       "Has anything happened recently that might be related — an injury, illness, "
+       "Has anything happened recently that might be related, such as an injury, illness, "
        "travel, or a change in medication?"),
 
     # ── background ──
@@ -134,9 +134,9 @@ FIELDS: Dict[str, FieldSpec] = {s.name: s for s in (
     # ── medication questions (spec 17) ──
     _f("medication_name", SCALAR, "Which medication are you asking about?"),
     _f("medication_dose", SCALAR,
-       "What is the strength of each dose — for example 81 mg or 500 mg?"),
+       "What is the strength of each dose, for example 81 mg or 500 mg?"),
     _f("medication_form", SCALAR,
-       "What form is it in — tablet, capsule, liquid, injection, or something else?"),
+       "What form is it in: tablet, capsule, liquid, injection, or something else?"),
     _f("medication_frequency", SCALAR,
        "How often do you take it?"),
     _f("medication_reason", SCALAR, "What were you prescribed it for?"),

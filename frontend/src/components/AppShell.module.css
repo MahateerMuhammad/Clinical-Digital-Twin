@@ -1,0 +1,84 @@
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  padding: var(--s-5) var(--s-4);
+  background: var(--n-25);
+  border-right: 1px solid var(--n-100);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: 0 var(--s-2);
+}
+
+.brandName {
+  font-family: var(--font-heading);
+  font-size: var(--t-lg);
+  font-weight: var(--w-heading);
+  color: var(--n-900);
+  line-height: var(--lh-tight);
+}
+
+.brandNote {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r);
+  color: var(--n-700);
+  font-size: var(--t-md);
+  text-decoration: none;
+  transition: background var(--dur) var(--ease);
+}
+
+.link:hover {
+  background: var(--n-50);
+}
+
+.linkActive {
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-weight: var(--w-label);
+}
+
+/* Pushed to the bottom: a standing condition of the deployment, not a nav item.
+ * It states what the system is rather than warning about it — an alarm colour
+ * here would spend attention that belongs to genuinely flagged clinical items. */
+.notice {
+  margin-top: auto;
+  padding: var(--s-3);
+  border-radius: var(--r);
+  background: var(--n-50);
+  color: var(--n-500);
+  font-size: var(--t-xs);
+  line-height: var(--lh-body);
+}
+
+.main {
+  padding: var(--s-6) var(--s-7);
+  min-width: 0;
+}

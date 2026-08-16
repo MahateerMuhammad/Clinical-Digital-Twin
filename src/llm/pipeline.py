@@ -267,14 +267,46 @@ class ClinicalReportPipeline:
             if isinstance(m, dict) and m.get("score") is not None
         }
         #
+        # SHAP contributions are registered for the third time on the same
+        # reasoning. They are the system's own arithmetic over its own model, they
+        # are rendered ("+1.445"), and an unregistered one would withhold the entire
+        # report for quoting a number the report itself computed. The feature
+        # *values* need no registration: they come from the payload, which is
+        # already the fact store's primary source.
+        # Registered signed *and* unsigned. The verifier's number extractor reads
+        # the digits of "-0.225" as 0.225 and cannot match a stored negative — the
+        # same behaviour documented for "-3%" in `payload_withheld_reason`. Half of
+        # these attributions are negative, so registering only the signed value
+        # withheld every report that contained one.
+        driver_scores: Dict[str, float] = {}
+        for d in (res.predictions.get("drivers") or []):
+            if isinstance(d, dict) and d.get("contribution") is not None:
+                c = float(d["contribution"])
+                driver_scores[f"driver_{d['feature']}"] = c
+                driver_scores[f"driver_{d['feature']}_magnitude"] = abs(c)
+                # The *value the model saw* is now printed in the explanation
+                # ("Creatinine, peak — 3.2"), and it is not always the payload's
+                # own number: aggregation and encoding sit between them, so a
+                # feature value can be grounded in the payload and still fail a
+                # digit match against it.
+                if d.get("value") is not None:
+                    driver_scores[f"driver_{d['feature']}_value"] = float(d["value"])
+        #
         # The payload-fidelity AUROCs are registered for the same reason: a withheld
         # task explains itself by naming the discrimination it lost, and those numbers
         # are published constants rather than claims about this patient.
         fact_store = build_fact_store(
             payload=payload, predictions=res.predictions, documents=res.documents,
             extra_numbers={**SYSTEM_CONSTANTS, **_payload_fidelity_constants(),
-                           **med_scores},
+                           **med_scores, **driver_scores},
         )
+        # `_CLAIM_PATTERNS` refuses any text mentioning SHAP unless the fact store
+        # knows the system computed some — a guard left by the version of this code
+        # that printed four invented attributions for every patient. Registering the
+        # entity only when drivers exist keeps that guard doing its job.
+        if driver_scores:
+            fact_store.entities.add("shap")
+
         res.report_markdown = deterministic_md
         res.generation_mode = "deterministic"
 
