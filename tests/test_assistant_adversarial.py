@@ -393,3 +393,107 @@ def test_sessions_are_isolated():
     a.start("two")
     a.handle("one", "I have a headache, I'm 45")
     assert a.session("two").context.get("age") is None
+
+
+# ── claims about what was done ───────────────────────────────────────────────
+#
+# Three defects with one shape: the system reporting an action it did not take.
+# Each was found by reading output, not by a failing test.
+
+def test_a_counterfactual_refuses_a_field_the_case_does_not_carry():
+    """
+    "What if the lactate were 2.0?" for a patient with no lactate on file used
+    to answer "change applied: lactate_max → 2.0" above four unchanged numbers,
+    and then explain the identity as "the model's output is not sensitive to
+    that value". The runner only overwrites keys that already exist, so nothing
+    had been changed and nothing had been measured.
+    """
+    from src.assistant.orchestrator import Assistant
+
+    # This one needs the boosters: the refusal is decided by the runner, which
+    # reports which modifications had a baseline to move from. The rest of this
+    # file runs without them, so the skip is local rather than module-wide.
+    try:
+        from src.llm.model_runner import LiveModelRunner
+        runner = LiveModelRunner()
+        if not runner.lgbm_models.get("mortality"):
+            pytest.skip("risk models not present")
+    except Exception as exc:                       # pragma: no cover
+        pytest.skip(f"risk models unavailable: {exc}")
+
+    from src.llm.pipeline import ClinicalReportPipeline
+
+    bot = Assistant.clinician(model_runner=runner,
+                              pipeline=ClinicalReportPipeline(model_runner=runner))
+    sid = bot.start().state.session_id
+    bot.handle(sid, "88F septic shock, Cr 3.2, BUN 48, WBC 19.4, bicarb 14, "
+                    "Na 131, K 5.2, plt 88, hct 29, glucose 210, SBP 82, HR 118. "
+                    "Mortality risk?")
+
+    res = bot.handle(sid, "What if the lactate were 2.0?")
+    assert "Change applied" not in res.reply
+    assert "not sensitive" not in res.reply
+    assert "no value on file" in res.reply
+
+
+def test_a_multi_question_turn_says_what_it_did_not_answer():
+    """
+    One turn resolves one intent, which is deliberate. Answering the first and
+    discarding the rest in silence is not: three questions in one message came
+    back as an answer about vasopressors with no sign the other two existed.
+    """
+    from src.assistant.orchestrator import Assistant
+
+    bot = Assistant.clinician()
+    sid = bot.start().state.session_id
+    res = bot.handle(sid, "What is the first-line vasopressor in septic shock? "
+                          "What does oliguric mean? "
+                          "What are the guidelines for managing DKA?")
+
+    assert "I only answered the first question" in res.reply
+    assert "oliguric" in res.reply
+    assert "DKA" in res.reply
+
+
+def test_a_single_question_gets_no_such_notice():
+    from src.assistant.orchestrator import Assistant
+
+    bot = Assistant.clinician()
+    sid = bot.start().state.session_id
+    res = bot.handle(sid, "What is the first-line vasopressor in septic shock?")
+    assert "I only answered the first question" not in res.reply
+
+
+def test_the_model_path_withholds_output_that_fails_verification():
+    """
+    The evidence path has always withheld; the model path ran the check, wrote
+    the verdict to the audit, and returned the answer anyway. The docstring at
+    the top of `orchestrator` promises `faithfulness ──fail──▶ withhold` for
+    both.
+    """
+    import inspect
+
+    from src.assistant import orchestrator as O
+
+    source = inspect.getsource(O.Assistant.handle)
+    model_branch = source[source.index("_MODEL_INTENTS"):]
+    assert "report.ok" in model_branch, \
+        "the model path returns without consulting its own verification result"
+
+
+def test_a_case_statement_is_never_treated_as_an_aside():
+    """
+    Scope cannot rest on the intent alone. "72F with septic shock" classifies as
+    a guideline lookup — it names a condition and little else — and routing it
+    to a scratch context discarded the age, sex and diagnosis a clinician had
+    just typed.
+    """
+    from src.assistant.orchestrator import Assistant
+
+    bot = Assistant.clinician()
+    sid = bot.start().state.session_id
+    bot.handle(sid, "72F with septic shock")
+
+    known = bot.sessions[sid].context.to_dict()["current"]
+    assert known.get("age") == 72.0, known
+    assert known.get("primary_diagnosis") == "septic shock", known

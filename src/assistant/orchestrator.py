@@ -61,9 +61,13 @@ from src.assistant import extraction as X
 from src.assistant import faithfulness as F
 from src.assistant import gate as G
 from src.assistant import triage as T
-from src.assistant.intents import CLINICIAN, PATIENT, Intent, resolve_intent
+from src.assistant.intents import (
+    CLINICIAN, KNOWLEDGE_INTENTS, PATIENT, Intent, classify, resolve_intent,
+)
 from src.assistant.requirements import for_intent
-from src.assistant.state import ConversationState, build_payload
+from src.assistant.state import (
+    ConversationState, PatientContext, build_payload,
+)
 
 __all__ = ["TurnResult", "Assistant", "WITHHELD", "CLINICIAN_CONFIG"]
 
@@ -189,7 +193,7 @@ def _format_whatif(out: Any) -> str:
 
     withheld = (out.get("deltas") or {}).get("withheld_tasks") or {}
     for task, reason in withheld.items():
-        lines.append(f"*{task} remains withheld — {reason}*")
+        lines.append(f"*{task} remains withheld: {reason}*")
     return "\n\n".join(lines)
 
 
@@ -225,7 +229,86 @@ def _whatif_numbers(out: Any) -> Dict[str, Any]:
     for key, value in (out.get("deltas") or {}).items():
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             numbers[f"delta.{key}"] = value
+            # Deltas are fractions here and percentage points on the page: the
+            # table prints "-0.44 pp" for a stored -0.0044, and the verifier
+            # matches digits. Registering only the fraction failed check 1 on
+            # every counterfactual that moved a raw score — which went unnoticed
+            # because this path did not act on its own verdict. The magnitude is
+            # registered too, since the number extractor reads "-0.44" as 0.44.
+            numbers[f"delta.{key}_pp"] = value * 100
+            numbers[f"delta.{key}_pp_magnitude"] = abs(value * 100)
+            numbers[f"delta.{key}_magnitude"] = abs(value)
     return numbers
+
+
+#: Fields a message can mention without being *about* a patient. A guideline
+#: question names its condition ("how is hyperkalaemia managed"), and a
+#: terminology question names its term; neither states anything observed.
+_TOPIC_ONLY_FIELDS = frozenset({"primary_diagnosis", "condition_name", "term",
+                                "topic", "medication_name"})
+
+
+def _states_patient_values(message: str) -> bool:
+    """
+    Whether this message reports something observed about a patient.
+
+    The scope rule cannot rest on the intent alone. "72F with septic shock"
+    classifies as a guideline lookup — it names a condition and little else —
+    and treating it as an aside discarded the age, the sex and the diagnosis a
+    clinician had just typed. Nothing failed; the facts simply went into a
+    scratch context and were dropped at the end of the turn.
+
+    Decided by the deterministic extractor rather than by a model, so a turn's
+    scope is reproducible and auditable like every other routing decision here.
+    A single value is enough: a clinician who mentions an age is describing a
+    patient, not asking a textbook question.
+    """
+    found = X._deterministic(message or "", allowed=None)
+    return any(p.field not in _TOPIC_ONLY_FIELDS for p in found)
+
+
+def _says_nothing(message: str, mode: str) -> bool:
+    """
+    Whether a message carries neither a recognisable request nor a fact.
+
+    Both halves are needed. Classification alone would catch "hmm" and also
+    "yesterday morning, about a 7 out of 10", which matches no intent rule and
+    is the very reply an open intent exists to receive. Extraction alone would
+    catch "hmm" and also "how is hyperkalaemia managed?", which states no
+    patient value and is a perfectly good question.
+
+    Empty on both counts is the honest definition of nothing to work with, and
+    it needs no list of filler words to maintain — "hm", "right" and
+    "akbflvhbalfb" are covered by the same two checks that cover "hmm".
+    """
+    text = (message or "").strip()
+    if not text:
+        return True
+    if classify(text, mode=mode).intent is not Intent.UNKNOWN:
+        return False
+    return not X._deterministic(text, allowed=None)
+
+
+
+#: A question mark followed by more words. Deliberately crude: the aim is to
+#: notice that several questions arrived, not to parse them.
+_EXTRA_QUESTION = re.compile(r"\?\s+\S")
+
+
+def _extra_questions(message: str) -> List[str]:
+    """
+    Questions after the first, which this turn will not answer.
+
+    One turn resolves one intent, which is a deliberate design: a turn that
+    answered three questions would have three gate decisions and one verdict.
+    The defect was never that — it was answering the first and discarding the
+    rest in silence. Asked "what is the first-line vasopressor? what does
+    oliguric mean? what are the guidelines for DKA?", the reply covered
+    vasopressors and gave no sign the other two had been dropped.
+    """
+    parts = [p.strip() for p in re.split(r"(?<=\?)\s+", (message or "").strip())
+             if p.strip()]
+    return parts[1:] if len(parts) > 1 else []
 
 
 @dataclass
@@ -343,9 +426,26 @@ class Assistant:
             state.intent = Intent.EMERGENCY.value
             return self._finish(state, rec, ans, tri=tri, report=report)
 
-        # ── 2. intent, persisted across turns ───────────────────────────────
+        # ── 2. intent, persisted across turns — unless it is an aside ───────
+        #
+        # A clinician working a case interrupts it: "what's the first-line
+        # vasopressor again?" between two laboratory values. That turn is about
+        # medicine, not about this patient, and it must be answerable without
+        # disturbing the case.
+        #
+        # Both halves of this used to be unconditional, and both misfired. The
+        # intent overwrite meant a guideline question either seized a session
+        # mid-counterfactual or — blocked by SWITCH_CONFIDENCE, which exists to
+        # protect a half-collected case — was answered *as* the counterfactual:
+        # "which value should I change?". Leaving `state.intent` alone makes the
+        # case still there afterwards, so resuming needs no stack and no resume
+        # logic; it is simply never lost.
+        self._extra_questions = _extra_questions(message)
         res = resolve_intent(state, message, mode=self.mode)
-        state.intent = res.intent.value
+        knowledge_turn = (res.intent in KNOWLEDGE_INTENTS
+                          and not _states_patient_values(message))
+        if not knowledge_turn:
+            state.intent = res.intent.value
         rec.intent = res.intent.value
         rec.intent_confidence = res.confidence
 
@@ -367,28 +467,64 @@ class Assistant:
             if ans is not None:
                 return self._finish(state, rec, ans, tri=tri)
 
-        if res.intent in (Intent.UNKNOWN, Intent.CAPABILITIES):
+        # A message that says nothing is answered the same way whether or not a
+        # case is open.
+        #
+        # `resolve_intent` turns an unrecognised message back into the intent
+        # already running, which is right for a reply that carries facts but no
+        # keyword ("yesterday morning, about a 7 out of 10"). For a message that
+        # carries nothing at all it meant the open case was simply recomputed
+        # from an unchanged context — so "hmm" re-emitted the previous answer
+        # word for word, as did "akbflvhbalfb". Nothing was wrong with the reply
+        # except that it was an answer to a question nobody had asked twice.
+        #
+        # The test is not a list of filler words, which "hm" or "right" would
+        # walk straight past: it is whether the message on its own recognises as
+        # anything, and whether any fact could be read out of it. A reply that
+        # answers a question passes on the second condition; "hmm" passes
+        # neither. The case is left standing, so the next real message continues
+        # it.
+        if res.intent in (Intent.UNKNOWN, Intent.CAPABILITIES) \
+                or _says_nothing(message, self.mode):
             ans = A.Answer(status=A.DECLINED_INCOMPLETE)
-            ans.add("", "I am not sure what you would like help with. Could you "
-                        "tell me a little more about what is going on?")
+            ans.add("", "I could not understand that. Could you tell me a "
+                        "little more about what you would like help with?")
+            if state.intent and res.intent not in (Intent.UNKNOWN,
+                                                   Intent.CAPABILITIES):
+                ans.add("", "The case you were working on is still open, so you "
+                            "can carry straight on from where you were.")
             return self._finish(state, rec, ans, tri=tri)
 
         # ── 3. requirements, then extraction scoped to them ─────────────────
-        reqs = for_intent(res.intent, state.context, path=self.requirements_path)
+        #
+        # An aside gets a scratch context, discarded when the turn ends. It is
+        # the other half of the same idea: a knowledge turn must be able to name
+        # a condition without that condition becoming *this patient's* diagnosis.
+        #
+        # "How should severe hyperkalaemia be managed?" wrote `hyperkalaemia`
+        # into the case, contradicted the septic shock already recorded, and the
+        # reply asked the clinician which of the two their patient had. The
+        # contradiction machinery was right; it was reading a general question as
+        # a statement about the patient. `allowed` could not prevent it — it
+        # filters *which* fields may be written, never *whether* this turn should
+        # write at all.
+        ctx = PatientContext() if knowledge_turn else state.context
+
+        reqs = for_intent(res.intent, ctx, path=self.requirements_path)
         rec.required_information = reqs.all_fields
         allowed = sorted(set(reqs.all_fields)
                          | {r.field for r in reqs.pending_conditionals}
                          | {"age", "sex"})
 
-        ext = X.extract(message, state.context, state.turn,
+        ext = X.extract(message, ctx, state.turn,
                         backend=self.backend, allowed=allowed)
         rec.extraction = ext.to_dict()
 
         # New facts can change which conditionals apply, so resolve again.
-        reqs = for_intent(res.intent, state.context, path=self.requirements_path)
+        reqs = for_intent(res.intent, ctx, path=self.requirements_path)
 
         # ── 4. the gate ─────────────────────────────────────────────────────
-        decision = G.evaluate(state.context, res.intent, requirement_set=reqs)
+        decision = G.evaluate(ctx, res.intent, requirement_set=reqs)
         rec.gate = decision.to_dict()
         rec.missing_information = decision.blocking_fields
 
@@ -427,44 +563,68 @@ class Assistant:
                               predictions=getattr(ans, "predictions", None),
                               upstream_grounding=getattr(ans, "grounding", None))
             rec.validation = report.to_dict()
+
+            # The model path verified and then returned the answer regardless.
+            # The check ran, the verdict was written to the audit, and nothing
+            # read it — so a counterfactual quoting an unregistered delta was
+            # shown with the "verified" badge simply absent, which no reader
+            # would notice. This module's own docstring says
+            # `compose ──▶ faithfulness ──fail──▶ withhold`; on this path it did
+            # not, and the evidence path twenty lines below always has.
+            if not report.ok and ans.status == A.ANSWERED:
+                return self._finish(state, rec, self._withheld(), tri=tri,
+                                    decision=decision, ev=ev, report=report)
             return self._finish(state, rec, ans, tri=tri, decision=decision,
                                 ev=ev, report=report)
 
         # ── 5b. evidence ────────────────────────────────────────────────────
-        subjects = [state.context.get(n) for n in
+        subjects = [ctx.get(n) for n in
                     ("condition_name", "symptom", "term", "topic",
                      "medication_name", "test_name", "previous_diagnosis",
                      "primary_diagnosis")]
-        subjects.append(state.context.get("associated_symptoms"))
+        subjects.append(ctx.get("associated_symptoms"))
         ev = E.retrieve(*subjects, path=self.corpus_path,
                         require_reviewed=self.require_reviewed_evidence,
                         sources=self.evidence_sources)
         rec.retrieved_sources = [d.doc_id for d in ev.documents]
 
         # ── 6. compose ──────────────────────────────────────────────────────
-        ans = A.compose(state.context, decision, ev, triage=tri,
-                        requested_fields=reqs.all_fields,
+        # An aside echoes nothing back as "what you have told me". The clinician
+        # did not state that their patient has hyperkalaemia; they asked how it
+        # is managed, and restating the topic as a supplied fact is the same
+        # confusion this whole change removes, one layer further down.
+        ans = A.compose(ctx, decision, ev, triage=tri,
+                        requested_fields=() if knowledge_turn else reqs.all_fields,
                         path=self.capabilities_path)
 
         # ── 7. verify before returning ──────────────────────────────────────
-        report = F.verify(ans, state.context, decision,
+        report = F.verify(ans, ctx, decision,
                           documents=ans.documents, triage=tri,
                           intent=res.intent)
         rec.validation = report.to_dict()
 
         if not report.ok:
-            withheld = A.Answer(status=WITHHELD)
-            withheld.add(
-                "I am not going to answer that",
-                "I put together a response and my own checks found a problem "
-                "with it, so I am not going to show it to you. That is working "
-                "as intended, but it does mean I cannot help with this. Please "
-                "ask a doctor or pharmacist.")
-            return self._finish(state, rec, withheld, tri=tri,
+            return self._finish(state, rec, self._withheld(), tri=tri,
                                 decision=decision, ev=ev, report=report)
 
         return self._finish(state, rec, ans, tri=tri, decision=decision,
                             ev=ev, report=report)
+
+    def _withheld(self) -> "A.Answer":
+        """
+        What is said when composition succeeded and verification refused it.
+
+        One definition, used by both the evidence path and the model path. They
+        had one between them, which is part of why the model path was able to
+        skip the check without the omission being obvious.
+        """
+        ans = A.Answer(status=WITHHELD)
+        ans.add("I am not going to answer that",
+                "I put together a response and my own checks found a problem "
+                "with it, so I am not going to show it to you. That is working "
+                "as intended, but it does mean I cannot help with this. Please "
+                "ask a doctor or pharmacist.")
+        return ans
 
     # ── the model path ──────────────────────────────────────────────────────
     def _model_answer(self, state: ConversationState, intent: Intent,
@@ -527,7 +687,7 @@ class Assistant:
         if not mods:
             ans = A.Answer(status=A.DECLINED_INCOMPLETE)
             ans.add("Which value should I change?",
-                    "Give me the field and the value — for example "
+                    "Give me the field and the value, for example "
                     "\"what if creatinine were 1.5\".")
             return ans, E.EvidenceResult()
 
@@ -538,17 +698,41 @@ class Assistant:
             return ans, E.EvidenceResult()
 
         out = runner.simulate_what_if_unseen_patient(payload, mods)
+        deltas = (out or {}).get("deltas") or {}
+        applied = deltas.get("applied", mods)
+        unapplied = deltas.get("unapplied", {})
+
+        # A change to a value the case does not carry has no baseline to move
+        # from, and the runner correctly leaves the payload alone. Reporting it
+        # as applied produced the worst output this path has emitted: "change
+        # applied: lactate_max → 2.0" above four identical numbers, explained as
+        # "the model's output is not sensitive to that value" — for a patient
+        # whose lactate was never supplied. Nothing was changed and nothing was
+        # measured, so nothing is claimed.
+        if not applied:
+            fields = ", ".join(sorted(unapplied))
+            ans = A.Answer(status=A.DECLINED_INCOMPLETE)
+            ans.add("There is nothing to change yet",
+                    f"This case has no value on file for {fields}, so there is "
+                    f"no baseline to move from. Supply it first and I can "
+                    f"re-score, or ask about a value already recorded.")
+            return ans, E.EvidenceResult()
+
         ans = A.Answer(status=A.ANSWERED)
         # The hypothetical value is a fact of this turn — the clinician stated
         # it — so it belongs in the permissible world alongside the model's
         # output, or check 1 rejects the answer for quoting the change back.
         ans.predictions = {**_whatif_numbers(out),
-                           **{f"modification.{k}": v for k, v in mods.items()}}
-        ans.add("Change applied", [f"{k} → {v}" for k, v in mods.items()])
+                           **{f"modification.{k}": v for k, v in applied.items()}}
+        ans.add("Change applied", [f"{k} → {v}" for k, v in applied.items()])
+        if unapplied:
+            ans.add("Not changed",
+                    [f"{k}: no value on file for this case, so there is no "
+                     f"baseline to change from" for k in sorted(unapplied)])
         ans.add("Model response", _format_whatif(out))
         ans.add("Important limitations",
                 ["This shows how the model responds to a changed input. It "
-                 "cannot show that changing it would change the outcome — the "
+                 "cannot show that changing it would change the outcome. The "
                  "models identify association, not treatment effect.",
                  "The counterfactual re-scores the same payload; nothing about "
                  "the patient's record has been altered."])
@@ -560,6 +744,16 @@ class Assistant:
     def _finish(self, state: ConversationState, rec: AU.AuditRecord,
                 ans: A.Answer, *, tri=None, decision=None, clar=None,
                 ev=None, report=None) -> TurnResult:
+        # Questions this turn did not take. Added here, before the answer is
+        # rendered: every exit passes through `_finish`, so one placement
+        # covers answered, declined and withheld alike.
+        extras = getattr(self, "_extra_questions", None)
+        if extras:
+            ans.add("I only answered the first question",
+                    [f"Not answered: {q}" for q in extras]
+                    + ["Ask them one at a time and I will take each in turn."])
+            self._extra_questions = None
+
         reply = ans.to_markdown()
         state.add_message("assistant", reply)
         rec.status = ans.status
