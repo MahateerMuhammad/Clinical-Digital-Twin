@@ -1,0 +1,75 @@
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-3);
+  padding: var(--s-2) 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--n-100);
+}
+
+.label {
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+
+/* A driver the clinician did not supply is the model reacting to an absence.
+ * Muted, and labelled below, so it cannot be read as a finding about them. */
+.labelMissing {
+  color: var(--n-500);
+}
+
+.value {
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--n-900);
+}
+
+/* The zero line sits in the middle: bars run right for "raises the estimate"
+ * and left for "lowers it", so the direction is readable without the sign. */
+.track {
+  grid-column: 1 / -1;
+  position: relative;
+  height: var(--s-2);
+}
+
+.axis {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--n-100);
+}
+
+.bar {
+  position: absolute;
+  top: var(--s-1);
+  height: var(--s-1);
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+
+/* Hatched rather than solid: same magnitude, visibly a different kind of thing. */
+.barMissing {
+  background: var(--hatch-missing);
+}
+
+.note {
+  margin-top: var(--s-3);
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  line-height: var(--lh-body);
+}
+
+.legend {
+  display: inline-block;
+  width: var(--s-3);
+  height: var(--s-2);
+  border-radius: var(--r-pill);
+  vertical-align: middle;
+  margin-right: var(--s-1);
+}

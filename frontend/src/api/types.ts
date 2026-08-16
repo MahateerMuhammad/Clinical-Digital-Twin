@@ -50,6 +50,24 @@ export interface TaskPrediction {
 }
 
 /**
+ * One SHAP attribution.
+ *
+ * `supplied` is load-bearing. A boosted tree routes a missing value down a
+ * default branch, so absence carries weight of its own: on a typed payload
+ * several of the largest attributions are the model responding to what it was
+ * not told. Rendered without that distinction, "Number of coded diagnoses
+ * +0.77" reads as a finding about the patient.
+ */
+export interface Driver {
+  feature: string;
+  label: string;
+  /** Signed, in log-odds. Positive raises the estimated risk. */
+  contribution: number;
+  value: number | null;
+  supplied: boolean;
+}
+
+/**
  * The model panel for one turn.
  *
  * Confidence is one label for the whole inference, not a number per task —
@@ -62,6 +80,7 @@ export interface Predictions {
   model_confidence: string;
   calibration_statement: string;
   input_kind: string;
+  drivers: Driver[];
 }
 
 /** A retrieved document. `tier` is trust rank, not decoration. */

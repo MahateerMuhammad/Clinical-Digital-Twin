@@ -69,11 +69,6 @@ kaggle_bundle/
 # Temporary/test scripts
 test_mixed.py
 
-# Zip archives
-*.zip
-src.zip
-
-
 # Secrets
 #
 # `.env` was NOT covered before. The `env/` entry above matches a virtualenv
@@ -91,3 +86,5 @@ frontend/*.tsbuildinfo
 # `*.html` above is aimed at generated report output; the app's entry point is
 # source, and without this exception the frontend does not build from a clone.
 !frontend/index.html
+
+node_modules/

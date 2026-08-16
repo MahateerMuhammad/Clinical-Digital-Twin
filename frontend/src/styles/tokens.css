@@ -101,6 +101,20 @@
   --sh-sm: 0 1px 2px rgb(35 33 31 / 4%), 0 1px 3px rgb(35 33 31 / 5%);
   --sh-md: 0 2px 8px rgb(35 33 31 / 6%), 0 8px 24px rgb(35 33 31 / 6%);
 
+  /* ── texture ──────────────────────────────────────────────────────────────
+   * How absent data looks. One decision, in one place: any component drawing a
+   * quantity the clinician did not supply uses this, so "supplied" and "the
+   * model inferred from an absence" never look alike in two different ways.
+   * The stripe geometry is the pattern itself, not a spacing choice.
+   */
+  --hatch-missing: repeating-linear-gradient(
+    45deg,
+    var(--n-300),
+    var(--n-300) 2px,
+    var(--n-50) 2px,
+    var(--n-50) 4px
+  );
+
   /* ── motion ───────────────────────────────────────────────────────────────*/
   --dur: 120ms;
   --ease: cubic-bezier(0.2, 0, 0.2, 1);

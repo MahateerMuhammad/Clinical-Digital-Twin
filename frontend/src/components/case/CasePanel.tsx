@@ -1,5 +1,6 @@
 import type { TurnResponse } from "../../api/types";
 import { Card } from "../ui/Card";
+import { DriverBars } from "../ui/DriverBars";
 import { Fact, label } from "../ui/Fact";
 import { ModelOutputPanel } from "../ui/ModelOutputPanel";
 import { SourceCitation } from "../ui/SourceCitation";
@@ -47,6 +48,12 @@ export function CasePanel({ turn }: { turn: TurnResponse }) {
       )}
 
       {turn.predictions && <ModelOutputPanel predictions={turn.predictions} />}
+
+      {turn.predictions && turn.predictions.drivers.length > 0 && (
+        <Card title="What moved the estimate" note="mortality model">
+          <DriverBars drivers={turn.predictions.drivers} />
+        </Card>
+      )}
 
       {turn.sources.length > 0 && (
         <Card title="Evidence" note={`${turn.sources.length} retrieved`}>

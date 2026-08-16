@@ -152,8 +152,8 @@ class ComposerTests(unittest.TestCase):
 
     def test_report_contains_required_sections(self):
         md = compose_report(PAYLOAD, PREDICTIONS, DOCS).to_markdown()
-        for heading in ["Observed values", "Model risk estimates", "Retrieved evidence",
-                        "Uncertainty", "Limitations", "Provenance"]:
+        for heading in ["What the models estimate", "What the guidelines say",
+                        "What this cannot tell you", "Appendix"]:
             self.assertIn(heading, md)
 
     def test_no_predictions_is_stated_not_invented(self):
@@ -165,6 +165,102 @@ class ComposerTests(unittest.TestCase):
                              ranked_medications=[{"raw": "zzz-drug", "recognised": False}])
         self.assertIn("not recognised", rep.to_markdown())
         self.assertTrue(rep.warnings)
+
+
+_DRIVERS = [
+    {"feature": "anchor_age", "label": "Age",
+     "contribution": 1.445, "value": 68.0, "supplied": True},
+    {"feature": "diagnosis_count", "label": "Number of coded diagnoses",
+     "contribution": 0.770, "value": None, "supplied": False},
+    {"feature": "lab_wbc_last_24h", "label": "White cells, last 24h",
+     "contribution": -0.225, "value": 26.5, "supplied": True},
+]
+
+
+class ClinicianReadabilityTests(unittest.TestCase):
+    """
+    The report is read by a clinician, not by the person who built the system.
+
+    Every assertion here corresponds to something a real rendering actually did:
+    log-odds printed as the explanation, a probability of 0.0% for an outcome
+    with a 2.19% base rate, an internal error record rendered as a guideline, and
+    a raw database code where a word belonged.
+    """
+
+    def _md(self, predictions=None, **kw):
+        return compose_report(PAYLOAD, predictions if predictions is not None
+                              else {**PREDICTIONS, "drivers": _DRIVERS},
+                              DOCS, **kw).to_markdown()
+
+    def _clinical_part(self, md: str) -> str:
+        return md.split("## Appendix")[0]
+
+    def test_the_answer_comes_before_the_restatement_of_the_input(self):
+        md = self._md()
+        self.assertLess(md.index("Estimated risk of dying"), md.index("Values used"),
+                        "the estimate must precede the echo of the supplied values")
+
+    def test_log_odds_never_appear_in_the_clinical_body(self):
+        body = self._clinical_part(self._md())
+        self.assertNotIn("log-odds", body)
+        self.assertNotIn("SHAP", body)
+        self.assertNotIn("+1.445", body)
+        # but the arithmetic is still auditable
+        self.assertIn("+1.445", self._md())
+
+    def test_an_unsupplied_driver_is_not_shown_as_a_patient_finding(self):
+        body = self._clinical_part(self._md())
+        absent_heading = "Counted, but not measured in this patient"
+        self.assertIn(absent_heading, body)
+        self.assertGreater(body.index("Number of coded diagnoses"),
+                           body.index(absent_heading),
+                           "an unsupplied feature must sit under the absence heading")
+
+    def test_a_vanishing_probability_is_not_rendered_as_zero(self):
+        """
+        7.2e-07 printed as "0.0%" reads as "this will not happen".
+
+        The deterioration model returns exactly this on a presentation payload,
+        against a 2.19% base rate in its own training cohort.
+        """
+        md = self._md({**PREDICTIONS, "p_deterioration": 7.2e-07})
+        self.assertNotIn("0.0%", md)
+        self.assertIn("near zero", md)
+        self.assertIn("not as an assurance the outcome will not happen", md)
+
+    def test_a_record_that_failed_its_integrity_check_is_not_shown_as_guidance(self):
+        failed = {"doc_id": "FDA_DAILYMED_vancomycin",
+                  "citation": "[NIH DailyMed FDA Label: VANCOMYCIN]",
+                  "title": "Citation Integrity Check Failed",
+                  "evidence_level": "Level 2: FDA Medication Labels",
+                  "text": "Level 2 evidence withheld, citation integrity check failed"}
+        md = compose_report(PAYLOAD, PREDICTIONS, DOCS + [failed]).to_markdown()
+        guidance = md.split("## Appendix")[0]
+        self.assertNotIn("Citation Integrity Check Failed", guidance)
+        self.assertIn("Records retrieved but not shown", md)
+
+    def test_a_withheld_task_says_what_that_means_before_it_says_why(self):
+        md = self._md({**PREDICTIONS,
+                       "withheld_tasks": {"p_los_over_5_63d": "AUROC 0.731 against 0.900"}})
+        body = self._clinical_part(md)
+        self.assertIn("not reported", body)
+        self.assertIn("It does not mean the risk is low", body)
+        self.assertNotIn("AUROC", body, "the audit belongs in the appendix")
+        self.assertIn("AUROC", md)
+
+    def test_sex_is_a_word_not_a_database_code(self):
+        md = compose_report({**PAYLOAD, "demographics": {"age": 68, "gender": "F"}},
+                            PREDICTIONS, DOCS).to_markdown()
+        self.assertIn("68-year-old female", md)
+
+    def test_an_empty_section_is_omitted_rather_than_rendered_empty(self):
+        md = self._md()
+        self.assertNotIn("Medications on the list", md)
+
+    def test_a_twin_failure_never_prints_an_exception_string(self):
+        md = self._md(twin_status="projection_unavailable: No module named 'src.models.x'")
+        self.assertNotIn("No module named", md)
+        self.assertIn("unavailable in this deployment", md)
 
 
 class _HallucinatingBackend(NullBackend):
@@ -216,12 +312,12 @@ class AdversarialLLMTests(unittest.TestCase):
     def test_rejected_output_still_returns_usable_report(self):
         r = self._pipeline(_HallucinatingBackend()).generate(PAYLOAD)
         self.assertEqual(r.status, "ok")
-        self.assertIn("Retrieved evidence", r.report_markdown)
+        self.assertIn("What the guidelines say", r.report_markdown)
 
     def test_empty_rephrase_is_rejected(self):
         r = self._pipeline(_TruncatingBackend()).generate(PAYLOAD)
         self.assertEqual(r.generation_mode, "deterministic_llm_rejected")
-        self.assertIn("Observed values", r.report_markdown)
+        self.assertIn("Values used", r.report_markdown)
 
     def test_null_backend_reports_deterministic_not_verified(self):
         """
@@ -240,7 +336,7 @@ class AdversarialLLMTests(unittest.TestCase):
         """
         r = self._pipeline(NullBackend()).generate(PAYLOAD)
         self.assertEqual(r.generation_mode, "deterministic")
-        self.assertIn("Observed values", r.report_markdown)
+        self.assertIn("Values used", r.report_markdown)
 
 
 class PipelineGateTests(unittest.TestCase):
@@ -358,3 +454,11 @@ def test_a_genuinely_invented_number_is_still_caught():
                              documents=[])
     result = verify_text("The patient's creatinine was 7.4 mg/dL.", store)
     assert any(v.kind == "ungrounded_number" for v in result.violations)
+
+
+def test_an_age_is_written_the_way_it_is_spoken():
+    """Extraction yields a float; "88.0-year-old" is spreadsheet, not speech."""
+    md = compose_report({**PAYLOAD, "demographics": {"age": 88.0, "gender": "F"}},
+                        PREDICTIONS, DOCS).to_markdown()
+    assert "88-year-old" in md
+    assert "88.0-year-old" not in md
