@@ -432,6 +432,35 @@ def _deterministic(message: str, allowed: Optional[List[str]]) -> List[Proposal]
             out.append(Proposal("medication_name", m.group(0), m.group(0)))
             seen.add("medication_name")
 
+    # Every drug named, as the patient's therapy list.
+    #
+    # `medication_name` is the *subject of a drug question* and has no payload
+    # path, so a clinician writing "on vancomycin and norepinephrine" filled a
+    # field the models never see: the payload carried no medications, the report
+    # had no medication section, and the same turn could print "Medication name:
+    # vancomycin" above "Not supplied: active medications". It also read only the
+    # first drug, silently discarding the rest of the list.
+    #
+    # Every match is taken rather than only those in a "on X" frame. A drug named
+    # anywhere in a clinician's case description is a drug the patient is on; the
+    # one message where that is wrong is a dosing question about a drug not yet
+    # started, and there the completeness gate asks rather than assumes.
+    if allowed is None or "active_medications" in allowed:
+        drugs, lowered, spans = [], set(), []
+        for m in _drug_pattern().finditer(message):
+            name = m.group(0)
+            spans.append(m.span())
+            if name.lower() not in lowered:
+                lowered.add(name.lower())
+                drugs.append(name)
+        if drugs:
+            # The quote must be a span that really occurs in the message:
+            # `_quote_is_real` rejects anything else, and a joined-up list
+            # ("vancomycin, norepinephrine") is a paraphrase however true it is.
+            quote = message[spans[0][0]:spans[-1][1]]
+            out.append(Proposal("active_medications", drugs, quote))
+            seen.add("active_medications")
+
     for name, pat in _DET_PATTERNS:
         if allowed is not None and name not in allowed:
             continue
