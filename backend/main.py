@@ -22,7 +22,7 @@ from typing import Any, Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend import routes_assistant, routes_models
+from backend import routes_assistant, routes_evidence, routes_models
 from backend.service import service
 
 #: Where the web UI will be served from in development. Comma-separated
@@ -65,6 +65,7 @@ app.add_middleware(
 
 app.include_router(routes_models.router)
 app.include_router(routes_assistant.router)
+app.include_router(routes_evidence.router)
 
 
 @app.get("/api/health", tags=["meta"])

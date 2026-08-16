@@ -160,7 +160,7 @@ def capabilities_message(path: Optional[Path] = None) -> Answer:
     ans = Answer(status=CAPABILITIES_SHOWN)
     ans.add("Hello", cfg.get("greeting", "").strip())
     ans.add("What I can help with",
-            [f"**{c['label']}** — {c.get('detail', '').strip()}"
+            [f"**{c['label']}**. {c.get('detail', '').strip()}"
              for c in cfg["capabilities"]])
     ans.add("", cfg.get("closing_question", "").strip())
     ans.disclaimer = cfg.get("disclaimer", "").strip()

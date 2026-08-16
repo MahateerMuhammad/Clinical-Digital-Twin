@@ -190,7 +190,7 @@ rules:
       - "\\bpoison\\w*\\b"
     emergency_advice: >-
       Poisoning and overdose need immediate assessment, even when someone feels
-      well at first — some effects are delayed.
+      well at first, because some effects are delayed.
 
   # ── mental health crisis ────────────────────────────────────────────────────
   - id: self_harm
@@ -207,7 +207,7 @@ rules:
     emergency_advice: >-
       I am sorry you are feeling like this, and you deserve support from someone
       who can properly help. Please contact your local emergency number or a
-      suicide crisis line now — they are staffed by people trained for exactly
+      suicide crisis line now. They are staffed by people trained for exactly
       this, and they will talk with you.
     # Suppresses the standard "go to an emergency department" framing, which is
     # not the right first step here.

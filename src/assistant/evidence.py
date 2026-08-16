@@ -143,7 +143,7 @@ class EvidenceResult:
                     "reviewed by a clinician yet, so I am not going to give it "
                     "to you as guidance. Please ask a doctor or pharmacist.")
         return ("I do not have a trusted source on file that covers this, and I "
-                "am not going to answer from memory — I could sound confident "
+                "am not going to answer from memory. I could sound confident "
                 "and be wrong. A doctor, pharmacist or your national health "
                 "service website would be a better place to ask.")
 

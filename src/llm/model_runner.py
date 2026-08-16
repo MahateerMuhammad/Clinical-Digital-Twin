@@ -7,6 +7,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.abspath('.'))
 
+from src.llm.drivers import risk_drivers as compute_drivers
 from src.llm.feature_space import (
     ONEHOT_KNOWN, align_to_model, as_frame, encode_admission_frame,
     feature_coverage, looks_like_admission_row, onehot_known,
@@ -89,9 +90,9 @@ def payload_withheld_reason(task):
         # discrimination" describes that badly — a reader takes it for a small
         # shortfall. It also breaks fail-closed verification, which reads the digits
         # of "-3%" as the number 3 and cannot match the negative constant.
-        return (f"{head} — below chance, so the model ranks patients in the wrong "
+        return (f"{head}, below chance, so the model ranks patients in the wrong "
                 f"direction on this input")
-    return (f"{head} — {retention:.0%} of the validated discrimination, below the "
+    return (f"{head}, {retention:.0%} of the validated discrimination, below the "
             f"{PAYLOAD_RETENTION_FLOOR:.0%} floor")
 
 
@@ -506,7 +507,7 @@ class LiveModelRunner:
             # that is not loaded.
             raise FileNotFoundError(
                 f"No model loaded for task '{task_key}'. Expected the Phase 1-5 "
-                f"pickles under '{self.models_dir}' — check the path is correct "
+                f"pickles under '{self.models_dir}'. Check the path is correct "
                 "relative to the current working directory, and that "
                 "scripts/maintenance/promote_models.py has been run.")
 
@@ -635,7 +636,30 @@ class LiveModelRunner:
         results['withheld_tasks'] = withheld
         results['raw_probabilities'] = raw
         results['input_kind'] = 'admission_row' if is_row else 'presentation_payload'
+
+        # Attributions for the mortality model only. It is the headline estimate,
+        # and running SHAP for all five would quadruple the cost of a turn to
+        # explain four numbers a reader is not looking at. A caller wanting
+        # another task can ask for it by name.
+        results['drivers'] = self.risk_drivers('mortality', p_series)
         return results
+
+    def risk_drivers(self, task_key, patient_features, top_k=8):
+        """
+        Which features moved ``task_key`` furthest for this patient.
+
+        Aligned exactly as ``predict_prob`` aligns it, so the attributions
+        describe the number that was actually served rather than a re-encoding
+        of the same payload. In particular the missing values stay NaN: a zero
+        would be a measurement, and the explanation would then disagree with
+        the prediction about what the model was told.
+        """
+        model = self.lgbm_models.get(task_key)
+        req_cols = self._feature_names(model) if model is not None else None
+        if model is None or req_cols is None:
+            return []
+        X = align_to_model(as_frame(patient_features), req_cols)
+        return [d.to_dict() for d in compute_drivers(model, X, top_k=top_k)]
 
     def simulate_what_if_unseen_patient(self, base_payload, modifications_dict):
         """
@@ -645,14 +669,41 @@ class LiveModelRunner:
         
         mod_payload = json.loads(json.dumps(base_payload)) if isinstance(base_payload, dict) else base_payload.copy()
         
+        # Which modifications actually landed, and which had nothing to land on.
+        #
+        # A key absent from the payload was silently skipped: asked "what if the
+        # lactate were 2.0?" for a patient whose lactate was never supplied, this
+        # overwrote nothing, re-scored the identical payload, and the caller
+        # reported "change applied" above four unchanged numbers — then explained
+        # that identity as "the model's output is not sensitive to that value".
+        # Both statements were false, and the second is the kind a clinician
+        # might act on.
+        applied: Dict[str, float] = {}
+        unapplied: Dict[str, float] = {}
         if isinstance(mod_payload, dict):
             labs = mod_payload.get('presentation_labs', {})
+            vitals = mod_payload.get('vital_signs', {})
             for k, v in modifications_dict.items():
+                if k == 'remove_meds':
+                    continue
                 if k in labs:
                     labs[k] = v
+                    applied[k] = v
+                elif k in vitals:
+                    vitals[k] = v
+                    applied[k] = v
                 elif k in mod_payload:
                     mod_payload[k] = v
+                    applied[k] = v
+                else:
+                    # Not "changed to 2.0" — there is no baseline to change from.
+                    # Adding it would answer a different question: what the model
+                    # says about a patient whose lactate is 2.0, rather than what
+                    # changes if this patient's lactate moves.
+                    unapplied[k] = v
             mod_payload['presentation_labs'] = labs
+            if vitals:
+                mod_payload['vital_signs'] = vitals
             
             if 'remove_meds' in modifications_dict:
                 meds = mod_payload.get('active_medications', [])
@@ -680,6 +731,11 @@ class LiveModelRunner:
                 # resolution limit as a broken wire.
                 deltas[f'delta_raw_{key}'] = mod_raw[key] - base_raw[key]
         deltas['withheld_tasks'] = dict(base_preds.get('withheld_tasks') or {})
+        # Carried so the caller can distinguish "nothing moved" from "nothing was
+        # changed". Without it the two are indistinguishable downstream, which is
+        # how a no-op came to be reported as an insensitivity finding.
+        deltas['applied'] = applied
+        deltas['unapplied'] = unapplied
         
         limitation = (
             "This analysis changes selected input variables and observes model output changes. "
