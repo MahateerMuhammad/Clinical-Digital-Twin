@@ -61,9 +61,14 @@ closing_question: What would you like to work through?
 # parts of the message that matter.
 prose:
   next_steps_title: Applying this
+  # Worded to stay true of every source now that answers can carry more than
+  # one. Guideline records really are paraphrases; a package insert is quoted,
+  # so calling it a paraphrase understated it and would have been the answer's
+  # own claim about its evidence, which is the thing this system checks.
   next_steps: >-
-    Verify the retrieved text against the source document before acting on it.
-    The corpus is a paraphrased summary and has not been clinician-reviewed.
+    Verify the retrieved text against its source document before acting on it.
+    Guideline records are paraphrased summaries and drug text is an extract of
+    the manufacturer's label; neither has been clinician-reviewed.
   unknown_field: "Not supplied: {field}."
   standing_limitations:
     - >-

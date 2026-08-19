@@ -24,6 +24,14 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Set, Tuple
+import logging
+import spacy
+
+try:
+    _NLP = spacy.load("en_core_sci_sm")
+except Exception as e:
+    logging.warning(f"Failed to load Clinical NER model: {e}")
+    _NLP = None
 
 __all__ = [
     "ConceptMatch",
@@ -439,6 +447,8 @@ BRAND_TO_INGREDIENT: Dict[str, str] = {
     "nacl": "normal saline", "normal saline 0 9": "normal saline",
     "ringers": "lactated ringers", "d5w": "dextrose", "dextrose 5": "dextrose",
     "hep": "heparin", "lmwh": "enoxaparin", "ppi": "pantoprazole",
+    "amio": "amiodarone", "prop": "propofol", "dex": "dexmedetomidine", 
+    "precedex": "dexmedetomidine",
 }
 
 # ingredient → therapeutic class (word-boundary safe; replaces keyword substrings)
@@ -561,3 +571,140 @@ def normalise_medications(items: object) -> List[DrugMatch]:
     except TypeError:
         seq = [items]
     return [normalise_medication(m) for m in seq]
+
+
+_RXNORM_CACHE = {}
+
+def _fetch_rxnorm_generic(brand_name: str) -> str:
+    """
+    Query the live RxNorm API to map an unknown brand name to its generic ingredient.
+    """
+    if brand_name in _RXNORM_CACHE:
+        return _RXNORM_CACHE[brand_name]
+        
+    import urllib.request
+    import json
+    import urllib.parse
+    
+    try:
+        # Step 1: Get RxCUI for the string
+        safe_name = urllib.parse.quote(brand_name)
+        url1 = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={safe_name}"
+        req1 = urllib.request.Request(url1, headers={'User-Agent': 'ClinicalDigitalTwin/1.0'})
+        with urllib.request.urlopen(req1, timeout=2) as response:
+            data1 = json.loads(response.read().decode())
+            
+        rxcui = None
+        if "idGroup" in data1 and "rxnormId" in data1["idGroup"]:
+            rxcui = data1["idGroup"]["rxnormId"][0]
+            
+        if not rxcui:
+            _RXNORM_CACHE[brand_name] = None
+            return None
+            
+        # Step 2: Get the generic ingredient (TTY=IN) for that RxCUI
+        url2 = f"https://rxnav.nlm.nih.gov/REST/rxcui/{rxcui}/related.json?tty=IN"
+        req2 = urllib.request.Request(url2, headers={'User-Agent': 'ClinicalDigitalTwin/1.0'})
+        with urllib.request.urlopen(req2, timeout=2) as response:
+            data2 = json.loads(response.read().decode())
+            
+        if "relatedGroup" in data2 and "conceptGroup" in data2["relatedGroup"]:
+            for group in data2["relatedGroup"]["conceptGroup"]:
+                if group.get("tty") == "IN" and "conceptProperties" in group:
+                    # Return the very first generic name found
+                    generic_name = group["conceptProperties"][0].get("name")
+                    if generic_name:
+                        generic_name = generic_name.lower()
+                        _RXNORM_CACHE[brand_name] = generic_name
+                        return generic_name
+                        
+    except Exception as e:
+        print(f"RxNorm API fallback failed for {brand_name}: {e}")
+        
+    _RXNORM_CACHE[brand_name] = None
+    return None
+
+def extract_medications_from_prompt(prompt: str) -> List[str]:
+    """
+    Extract generic medication names from a free-text prompt using a hybrid pipeline:
+    1. Aho-Corasick (FlashText) for exact phrases, multi-word drugs, and abbreviations.
+    2. RapidFuzz for fuzzy spelling correction on remaining unknown tokens.
+    Returns a deduplicated list of generic active ingredients.
+    """
+    import re
+    try:
+        from flashtext import KeywordProcessor
+        from rapidfuzz import process, fuzz
+    except ImportError:
+        # Fallback to empty if pip install failed for any reason
+        return []
+        
+    if not prompt:
+        return []
+        
+    found_ingredients = set()
+    
+    # Preprocessing
+    clean_prompt = prompt.lower()
+    # Normalize punctuation (e.g., piperacillin-tazobactam -> piperacillin tazobactam)
+    clean_prompt = re.sub(r'[-/]', ' ', clean_prompt)
+    clean_prompt = _PUNCT.sub(" ", clean_prompt)
+    
+    # 1. Aho-Corasick Exact Phrase Matcher
+    kp = KeywordProcessor(case_sensitive=False)
+    
+    # Add targets (Mapping everything to its generic base)
+    for ing in _KNOWN_INGREDIENTS:
+        kp.add_keyword(ing, ing)
+    for brand, ing in BRAND_TO_INGREDIENT.items():
+        kp.add_keyword(brand, ing)
+        
+    # Extract exact matches (handles multi-word and abbreviations safely)
+    exact_matches = kp.extract_keywords(clean_prompt, span_info=True)
+    
+    # Record matches and remove them from the text so we don't fuzzy match them
+    spans_to_remove = []
+    for keyword, start, end in exact_matches:
+        found_ingredients.add(keyword)
+        spans_to_remove.append((start, end))
+        
+    # Build remaining text for fuzzy matching
+    # Sort spans descending so we can slice out from end to start
+    spans_to_remove.sort(key=lambda x: x[0], reverse=True)
+    remaining_text = clean_prompt
+    for start, end in spans_to_remove:
+        remaining_text = remaining_text[:start] + " " + remaining_text[end:]
+        
+    # 2. Extract potential entities using Clinical NER (if available)
+    if _NLP:
+        doc = _NLP(remaining_text)
+        # en_core_sci_sm labels biomedical entities as 'ENTITY'
+        words = [ent.text.strip() for ent in doc.ents if len(ent.text.strip()) > 3]
+        
+        # Fallback to word splitting if NER found absolutely nothing but there is text
+        if not words and len(remaining_text.strip()) > 0:
+            words = [w.strip() for w in remaining_text.split() if len(w.strip()) > 3]
+    else:
+        words = [w.strip() for w in remaining_text.split() if len(w.strip()) > 3]
+    
+    targets = list(_KNOWN_INGREDIENTS) + list(BRAND_TO_INGREDIENT.keys())
+    
+    for word in words:
+        # Strict cutoff of 90 to prevent false positive mapping
+        result = process.extractOne(word, targets, scorer=fuzz.ratio, score_cutoff=90)
+        if result:
+            match = result[0]
+            if match in BRAND_TO_INGREDIENT:
+                found_ingredients.add(BRAND_TO_INGREDIENT[match])
+            else:
+                found_ingredients.add(match)
+        else:
+            # 3. RxNorm API Fallback for words that completely failed fuzzy matching
+            # Only check substantial words to prevent pinging API for random clinical acronyms
+            if len(word) >= 5:
+                rxnorm_generic = _fetch_rxnorm_generic(word)
+                if rxnorm_generic:
+                    found_ingredients.add(rxnorm_generic)
+                
+    # Deduplicate and return
+    return list(found_ingredients)

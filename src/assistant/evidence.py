@@ -32,21 +32,29 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import yaml
 
 __all__ = [
     "EvidenceDoc", "EvidenceResult", "retrieve", "load_corpus",
     "OK", "NO_SOURCE", "TIER_NAMES", "PATIENT_CORPUS_PATH",
-    "PATIENT_CORPUS", "GUIDELINES", "DEFAULT_SOURCES",
+    "PATIENT_CORPUS", "GUIDELINES", "DRUG_LABELS", "DEFAULT_SOURCES",
 ]
 
 #: Selectable corpora. `patient` is the plain-language file that ships empty;
 #: `guidelines` is the curated society corpus in `src/llm/guidelines.py`, which
-#: is written for clinicians and is the right source for that audience.
+#: is written for clinicians and is the right source for that audience;
+#: `drug_labels` is the manufacturer's package insert, fetched from OpenFDA.
+#:
+#: The first two are indexed by *condition*. A question about a drug rather than
+#: about a disease — "what are the contraindications for vancomycin?" — matched
+#: nothing in either, and with no drug-evidence path available it fell through
+#: to `drug_dosing`, the only intent that knows what a drug name is, which
+#: demanded a creatinine before it would discuss a package insert.
 PATIENT_CORPUS = "patient"
 GUIDELINES = "guidelines"
+DRUG_LABELS = "drug_labels"
 DEFAULT_SOURCES = (PATIENT_CORPUS,)
 
 OK = "ok"
@@ -303,6 +311,118 @@ def _guideline_docs(subjects: Sequence[Any], terms: Sequence[str],
     return out
 
 
+#: OpenFDA's label endpoint, searched on generic name so brand queries have
+#: already been resolved to an ingredient before we get here.
+_FDA_LABEL_URL = ('https://api.fda.gov/drug/label.json'
+                  '?search=openfda.generic_name:"{drug}"&limit=1')
+
+#: Label sections worth quoting to a clinician asking about drug safety, in the
+#: order a package insert presents them. A label carrying none of these has
+#: nothing to say on the question and is treated as no source at all.
+_FDA_SECTIONS: Tuple[Tuple[str, str], ...] = (
+    ("boxed_warning", "BOXED WARNING"),
+    ("contraindications", "CONTRAINDICATIONS"),
+    ("warnings_and_cautions", "WARNINGS AND CAUTIONS"),
+    ("warnings", "WARNINGS"),
+    ("drug_interactions", "DRUG INTERACTIONS"),
+)
+
+#: Per section, so one enormous warnings block cannot crowd out the others.
+_FDA_SECTION_CHARS = 700
+
+
+def _drug_label_docs(subjects: Sequence[Any], top_k: int) -> List[EvidenceDoc]:
+    """
+    Retrieve manufacturers' package inserts from OpenFDA.
+
+    Only *recognised* medications are queried. ``normalise_medication`` resolves
+    brand names, salt forms and eMAR strings to an ingredient, and anything it
+    does not recognise is dropped rather than sent — which keeps the endpoint
+    from being asked about "septic shock", and keeps an unrecognised word from
+    silently becoming a drug the answer then cites.
+
+    ``src.llm.rag_corpus.fetch_live_fda_dailymed`` covers the same endpoint and
+    is deliberately not reused. It swallows every exception and then returns a
+    placeholder document naming the drug with no label content, which is right
+    for a report that lists what it consulted and wrong here: this module's
+    contract is that an answer may only contain what retrieval returned, so a
+    hollow document is worse than none. Retrieval failing and the label having
+    nothing to say must both end as ``NO_SOURCE`` and a decline. Instantiating
+    ``ClinicalRAG`` would also read three parquet files, including the notes
+    table, on a conversational turn.
+    """
+    from src.llm.evidence_cache import RetrievalUnavailable, get_default_cache
+    from src.llm.terminology import normalise_medication
+
+    ingredients: List[str] = []
+    for subject in subjects:
+        for chunk in (subject if isinstance(subject, (list, tuple)) else [subject]):
+            if not chunk:
+                continue
+            m = normalise_medication(str(chunk))
+            if m.matched and m.ingredient not in ingredients:
+                ingredients.append(m.ingredient)
+    if not ingredients:
+        return []
+
+    cache = get_default_cache()
+    out: List[EvidenceDoc] = []
+    for drug in ingredients[:top_k]:
+        try:
+            data = cache.get_json(_FDA_LABEL_URL.format(drug=quote(drug)))
+        except RetrievalUnavailable:
+            # Transport failure is not evidence of absence, but this module has
+            # no way to say "ask me again later" — and inventing a document to
+            # carry that message would put unsourced text in front of a
+            # clinician. Declining is the honest floor.
+            continue
+        except Exception:
+            continue
+
+        results = data.get("results") or []
+        if not results:
+            continue
+        label = results[0]
+
+        parts: List[str] = []
+        for key, heading in _FDA_SECTIONS:
+            body = label.get(key) or []
+            if not body:
+                continue
+            text = str(body[0]).strip()
+            if len(text) > _FDA_SECTION_CHARS:
+                text = text[:_FDA_SECTION_CHARS - 1].rstrip() + "…"
+            parts.append(f"{heading}: {text}")
+        if not parts:
+            continue
+
+        openfda = label.get("openfda") or {}
+        brands = [b for b in (openfda.get("brand_name") or []) if str(b).strip()]
+        title = (f"FDA package insert: {drug}"
+                 + (f" ({brands[0]})" if brands else ""))
+
+        out.append(EvidenceDoc(
+            doc_id=f"fda_label_{drug.replace(' ', '_')}",
+            title=title,
+            text="\n\n".join(parts),
+            # The FDA is a government body, which is what tier 2 names. It is
+            # not tier 1: a package insert is a regulatory document about a
+            # product, not a society's recommendation for managing a patient.
+            source_name="U.S. Food and Drug Administration",
+            source_tier=2,
+            url="https://open.fda.gov/apis/drug/label/",
+            topics=(drug,),
+            retrieved_on="",
+            # Nobody has reviewed these either, and saying so keeps
+            # `require_reviewed` meaning the same thing across every source.
+            review_status="unreviewed",
+            verbatim=True,
+            keywords=tuple(str(b).lower() for b in brands[:4]),
+            citation_text=f"[FDA package insert: {drug}]",
+        ))
+    return out
+
+
 def retrieve(*subjects: Any, top_k: int = 4, require_reviewed: bool = False,
              path: Optional[Path] = None, min_score: int = 1,
              sources: Sequence[str] = DEFAULT_SOURCES) -> EvidenceResult:
@@ -325,6 +445,11 @@ def retrieve(*subjects: Any, top_k: int = 4, require_reviewed: bool = False,
     guideline_hits: List[EvidenceDoc] = []
     if GUIDELINES in sources:
         guideline_hits = _guideline_docs(subjects, terms, top_k)
+    if DRUG_LABELS in sources:
+        # Concept-matched upstream by the drug normaliser, exactly as the
+        # guideline hits are by the diagnosis normaliser, so they join the same
+        # pool that is scored but never dropped for word overlap.
+        guideline_hits += _drug_label_docs(subjects, top_k)
 
     # Guideline hits are already concept-matched by `retrieve_guidelines`, so
     # they are scored on relevance but never dropped for it. Word overlap would

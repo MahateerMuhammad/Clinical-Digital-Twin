@@ -65,6 +65,13 @@ class Intent(str, Enum):
     RISK_ASSESSMENT = "risk_assessment"
     GUIDELINE_LOOKUP = "guideline_lookup"
     DRUG_DOSING = "drug_dosing"
+    #: Contraindications, warnings and interactions — properties of the drug,
+    #: not of the patient. Split from `DRUG_DOSING` because they share a
+    #: vocabulary and need opposite things: a dose depends on this patient's
+    #: renal function, a contraindication list is the same sentence whoever is
+    #: being treated. Merged, "what are the contraindications for vancomycin?"
+    #: inherited the dosing policy and was answered by demanding a creatinine.
+    DRUG_SAFETY = "drug_safety"
     COUNTERFACTUAL = "counterfactual"
     #: Asks the assistant to read a patient record it has no access to.
     #: Routed so the refusal can name the real boundary. Without it the message
@@ -108,8 +115,12 @@ class Intent(str, Enum):
 #: `drug_dosing` is deliberately absent. "Can I give full-dose enoxaparin?" is a
 #: question about this patient and needs their creatinine; treating it as
 #: general knowledge would cut it off from the case it depends on.
+#: `drug_safety` is present for the same reason `drug_dosing` is not: a package
+#: insert describes the drug, not the patient, so answering one mid-case must
+#: not write the drug into their record or disturb a half-collected assessment.
 KNOWLEDGE_INTENTS: frozenset = frozenset({
     Intent.GUIDELINE_LOOKUP,
+    Intent.DRUG_SAFETY,
     Intent.TERMINOLOGY,
     Intent.CONDITION_INFORMATION,
     Intent.GENERAL_EDUCATION,
@@ -129,6 +140,7 @@ MODE_INTENTS: Dict[str, frozenset] = {
     }),
     CLINICIAN: frozenset({
         Intent.RISK_ASSESSMENT, Intent.GUIDELINE_LOOKUP, Intent.DRUG_DOSING,
+        Intent.DRUG_SAFETY,
         Intent.COUNTERFACTUAL, Intent.LAB_RESULT_INTERPRETATION,
         Intent.TERMINOLOGY, Intent.CAPABILITIES, Intent.UNKNOWN,
         Intent.RECORD_ACCESS, Intent.DIAGNOSIS_REQUEST,
@@ -145,6 +157,19 @@ MIN_CONFIDENCE = 0.30
 #: than ``MIN_CONFIDENCE``. Starting a topic is cheap; leaving a half-collected
 #: one throws away answers the patient has already given.
 SWITCH_CONFIDENCE = 0.55
+
+
+#: Drugs whose name alone signals the message is about the drug. Shared by
+#: `DRUG_DOSING` and `DRUG_SAFETY` so the two cannot drift: a drug added for one
+#: reading and not the other would route "contraindications" and "dose" to
+#: different intents for the same agent.
+_DRUG_NAMES = (r"vancomycin|vanc|cefepime|gentamicin|enoxaparin|heparin|"
+               r"piperacillin|meropenem|amikacin|tobramycin|colistin")
+
+#: The drug is being listed as current therapy rather than asked about.
+#: "On vancomycin and norepinephrine" is part of a case description.
+_NOT_PRESCRIBED = (r"(?<!\bon )(?<!\breceiving )(?<!\btaking )(?<!\bgiven )"
+                   r"(?<!\bgetting )(?<!\bstarted on )")
 
 
 @dataclass(frozen=True)
@@ -282,9 +307,22 @@ _RULES: List[Tuple[Intent, _Rule]] = [
     # and an explicit "what is her mortality risk?" — into the drug-dosing path,
     # where it was answered with retrieved guideline text and a complaint that no
     # medication dose had been supplied. The models were never run.
-    _r(Intent.DRUG_DOSING, r"(?<!\bon )(?<!\breceiving )(?<!\btaking )(?<!\bgiven )(?<!\bgetting )(?<!\bstarted on )\b(?:vancomycin|vanc|cefepime|gentamicin|enoxaparin|heparin|piperacillin|meropenem|amikacin|tobramycin|colistin)\b", 0.55, "drug named"),
+    _r(Intent.DRUG_DOSING, _NOT_PRESCRIBED + r"\b(?:" + _DRUG_NAMES + r")\b", 0.55, "drug named"),
     _r(Intent.DRUG_DOSING, r"\b(?:worried|concerned) about\b", 0.20, "safety concern"),
     _r(Intent.DRUG_DOSING, r"\b(?:safe to (?:give|continue)|should i (?:hold|stop|continue))\b", 0.45, "drug decision"),
+
+    # ── drug safety ──
+    # A property of the drug, answerable from its package insert without knowing
+    # whose chart it is. Deliberately excludes "safe to give", "should I hold"
+    # and "nephrotoxic", which are `DRUG_DOSING`: those ask whether to give it to
+    # *this* patient, and that does depend on their renal function.
+    _r(Intent.DRUG_SAFETY,
+       r"\b(?:contraindicat\w+|side ?effects?|adverse (?:effects?|reactions?|events?)|"
+       r"drug interactions?|interacts? with|boxed warning|black.?box|"
+       r"warnings? and (?:cautions?|precautions?))\b", 0.55, "drug safety question"),
+    # Lower than the dosing rule's 0.55 for the same names: on its own a drug
+    # name is not a safety question, and only the pairing should outrank dosing.
+    _r(Intent.DRUG_SAFETY, _NOT_PRESCRIBED + r"\b(?:" + _DRUG_NAMES + r")\b", 0.30, "drug named"),
 
     # ── counterfactual ──
     _r(Intent.COUNTERFACTUAL, r"\bwhat if\b", 0.55, "counterfactual frame"),
@@ -306,6 +344,9 @@ _PRIORITY: Dict[Intent, float] = {
     Intent.DOCTOR_QUESTION_PREP: 0.10,
     Intent.RISK_ASSESSMENT: 0.08,
     Intent.MEDICATION_QUESTION: 0.06,
+    # Above `DRUG_DOSING`: both fire on the drug's name, and where the message
+    # also carries explicit safety language that is the more specific reading.
+    Intent.DRUG_SAFETY: 0.10,
     Intent.DRUG_DOSING: 0.06,
     Intent.TERMINOLOGY: 0.04,
 }

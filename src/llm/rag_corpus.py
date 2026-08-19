@@ -17,6 +17,7 @@ from src.llm.terminology import (
     normalise_medications,
     concept_evidence_terms,
     stem,
+    extract_medications_from_prompt,
 )
 from src.llm.evidence_cache import RetrievalUnavailable, get_default_cache
 from src.llm.guidelines import retrieve_guidelines
@@ -589,53 +590,75 @@ class LiveRealtimeMedicalRAGEngine:
             return None
             
         encoded_drug = urllib.parse.quote(drug_clean)
-        url = f"https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json?drug_name={encoded_drug}&pagesize=1"
+        # Using OpenFDA instead of DailyMed directly
+        url = f"https://api.fda.gov/drug/label.json?search=openfda.generic_name:\"{encoded_drug}\"&limit=1"
         
         try:
-            # routed through the shared cache: TTL, rate limiting, retry/backoff,
-            # and an explicit RetrievalUnavailable on transport failure
             data = self.evidence_cache.get_json(url)
-            if True:
-                items = data.get('data', [])
-                if len(items) > 0:
-                    raw_title = items[0].get('title', f'{drug_clean.upper()} Package Insert')
-                    spl_id = items[0].get('spl_id', drug_clean)
-                    doc_id = f"FDA_DAILYMED_{spl_id}"
-                    
-                    v_title = self.verify_pmid_identity(doc_id, f"Official FDA Label: {raw_title}")
-                    if v_title is None:
-                        return {
-                            "doc_id": doc_id,
-                            "drug_name": drug_clean,
-                            "citation": f"[NIH DailyMed FDA Label: {drug_clean.upper()}]",
-                            "title": "Citation Integrity Check Failed",
-                            "category": "Live NIH DailyMed FDA Label",
-                            "evidence_level": "Level 2: FDA Medication Labels",
-                            "text": "Level 2 evidence withheld — citation integrity check failed"
-                        }
-                        
+            items = data.get('results', [])
+            if len(items) > 0:
+                item = items[0]
+                openfda_data = item.get('openfda', {})
+                brand_names = openfda_data.get('brand_name', [drug_clean.upper()])
+                
+                title_name = brand_names[0] if brand_names else drug_clean.upper()
+                doc_id = f"FDA_OPENFDA_{drug_clean}"
+                
+                v_title = self.verify_pmid_identity(doc_id, f"Official FDA Label: {title_name}")
+                if v_title is None:
                     return {
                         "doc_id": doc_id,
                         "drug_name": drug_clean,
-                        "citation": f"[NIH DailyMed FDA Label: {drug_clean.upper()}]",
-                        "title": v_title,
-                        "category": "Live NIH DailyMed FDA Label",
+                        "citation": f"[OpenFDA Label: {drug_clean.upper()}]",
+                        "title": "Citation Integrity Check Failed",
+                        "category": "Live OpenFDA Label",
                         "evidence_level": "Level 2: FDA Medication Labels",
-                        "text": f"Official NIH DailyMed Package Insert for {drug_clean.upper()}: Evaluate continuous infusion vs bolus diuresis, renal clearance, and electrolyte panel prior to administration."
+                        "text": "Level 2 evidence withheld — citation integrity check failed"
                     }
+                
+                # Extract warnings safely
+                warnings_list = item.get('warnings_and_cautions', item.get('warnings', []))
+                boxed_warnings = item.get('boxed_warning', [])
+                contraindications = item.get('contraindications', [])
+                
+                text_parts = []
+                if boxed_warnings:
+                    text_parts.append(f"BOXED WARNING: {boxed_warnings[0]}")
+                if contraindications:
+                    text_parts.append(f"CONTRAINDICATIONS: {contraindications[0]}")
+                if warnings_list:
+                    text_parts.append(f"WARNINGS: {warnings_list[0]}")
+                
+                final_text = "\n\n".join(text_parts).strip()
+                if not final_text:
+                    final_text = f"OpenFDA Package Insert for {drug_clean.upper()}: No explicit warnings found in summary."
+                
+                # Truncate to avoid context window explosion
+                if len(final_text) > 800:
+                    final_text = final_text[:797] + "..."
+                    
+                return {
+                    "doc_id": doc_id,
+                    "drug_name": drug_clean,
+                    "citation": f"[OpenFDA Label: {drug_clean.upper()}]",
+                    "title": v_title,
+                    "category": "Live OpenFDA Label",
+                    "evidence_level": "Level 2: FDA Medication Labels",
+                    "text": final_text
+                }
         except Exception:
             pass
             
         doc_id = f"FDA_GENERIC_{drug_clean}"
-        title = f"NIH DailyMed Reference: {drug_clean.upper()}"
+        title = f"OpenFDA Reference: {drug_clean.upper()}"
         v_title = self.verify_pmid_identity(doc_id, title)
         if v_title is None:
             return {
                 "doc_id": doc_id,
                 "drug_name": drug_clean,
-                "citation": f"[NIH DailyMed FDA Label: {drug_clean.upper()}]",
+                "citation": f"[OpenFDA Label: {drug_clean.upper()}]",
                 "title": "Citation Integrity Check Failed",
-                "category": "Live NIH DailyMed FDA Label",
+                "category": "Live OpenFDA Label",
                 "evidence_level": "Level 2: FDA Medication Labels",
                 "text": "Level 2 evidence withheld — citation integrity check failed"
             }
@@ -643,11 +666,11 @@ class LiveRealtimeMedicalRAGEngine:
         return {
             "doc_id": doc_id,
             "drug_name": drug_clean,
-            "citation": f"[NIH DailyMed FDA Label: {drug_clean.upper()}]",
+            "citation": f"[OpenFDA Label: {drug_clean.upper()}]",
             "title": v_title,
-            "category": "Live NIH DailyMed FDA Label",
+            "category": "Live OpenFDA Label",
             "evidence_level": "Level 2: FDA Medication Labels",
-            "text": f"NIH DailyMed Official Package Insert for {drug_clean.upper()}: Evaluate continued therapy, renal dosing, and therapeutic levels."
+            "text": f"OpenFDA Official Package Insert for {drug_clean.upper()}: Evaluate continued therapy, renal dosing, and therapeutic levels."
         }
 
     ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
@@ -889,13 +912,19 @@ class LiveRealtimeMedicalRAGEngine:
         q_clean = str(query_str).strip() if query_str and str(query_str).strip() else \
             " ".join(t for t in query_terms if t) + " clinical management"
 
+        # Extract meds from user prompt using fuzzy logic
+        prompt_meds = extract_medications_from_prompt(q_clean)
+        # Prioritize prompt meds, fallback to prescribed meds
+        fda_targets = prompt_meds if prompt_meds else ingredients
+        fda_targets = list(dict.fromkeys(fda_targets))
+
         docs = []
 
         # ── Level 1: curated guideline corpus ────────────────────────────
         docs.extend(retrieve_guidelines(concepts, query_terms=query_terms + [q_clean], top_k=4))
 
         # ── Level 2: FDA labels for the ranked medications ───────────────
-        for ing in ingredients[:4]:
+        for ing in fda_targets[:4]:
             try:
                 f_doc = self.fetch_live_fda_dailymed(ing)
             except RetrievalUnavailable as e:

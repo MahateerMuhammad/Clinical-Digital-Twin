@@ -306,6 +306,24 @@ def _diagnosis_patterns() -> List[Tuple[str, re.Pattern]]:
 _DRUG_PATTERN: Optional[re.Pattern] = None
 
 
+#: Asking *about* a drug. The question is answered from the drug's label and
+#: says nothing about who is being treated.
+_REFERENCE_FRAME = re.compile(
+    r"\b(?:contraindicat\w+|side ?effects?|adverse (?:effects?|reactions?|events?)|"
+    r"interactions?|boxed warning|black.?box|warnings? and (?:cautions?|precautions?))\b",
+    re.I,
+)
+
+#: Saying the drug is being given. Mirrors the lookbehinds `intents.py` uses to
+#: keep a case description out of the dosing branch — the same distinction, read
+#: forwards. When both frames are present the patient really is on the drug and
+#: the clinician is asking about it, so the medication is still recorded.
+_ADMINISTRATION_FRAME = re.compile(
+    r"\b(?:on|receiving|taking|given|getting|started on|continued on|prescribed|"
+    r"commenced on)\s+(?:the\s+)?\w", re.I,
+)
+
+
 def _drug_pattern() -> re.Pattern:
     """
     One alternation over the known drug lexicon.
@@ -445,7 +463,17 @@ def _deterministic(message: str, allowed: Optional[List[str]]) -> List[Proposal]
     # anywhere in a clinician's case description is a drug the patient is on; the
     # one message where that is wrong is a dosing question about a drug not yet
     # started, and there the completeness gate asks rather than assumes.
-    if allowed is None or "active_medications" in allowed:
+    #
+    # A reference question is the second exception, and it has no gate behind it
+    # to catch the mistake: "what are the contraindications for vancomycin?"
+    # names a drug the clinician is asking *about*, and recording it as therapy
+    # put a drug the patient is not receiving into their medication list, then
+    # answered from it. The frame is what separates the two, so a message that
+    # asks about a drug without also saying it is being given proposes no
+    # medications — `medication_name` still carries the subject of the question.
+    if _REFERENCE_FRAME.search(message) and not _ADMINISTRATION_FRAME.search(message):
+        pass
+    elif allowed is None or "active_medications" in allowed:
         drugs, lowered, spans = [], set(), []
         for m in _drug_pattern().finditer(message):
             name = m.group(0)

@@ -127,6 +127,23 @@ intents:
       - active_medications
       - medication_dose
 
+  # Contraindications, warnings and interactions come off the package insert and
+  # are the same text whoever is being treated, so the only thing that must be
+  # known is which drug. Requiring a creatinine here — which `drug_dosing` does,
+  # correctly, for a dose — meant "what are the contraindications for
+  # vancomycin?" was answered by asking for a lab value the answer never uses.
+  drug_safety:
+    safety_critical: []
+    required:
+      - medication_name
+    # Not required, but they change which part of a long label matters, so the
+    # answer says what it could not take into account when they are absent.
+    optional:
+      - creatinine_max
+      - primary_diagnosis
+      - age
+      - active_medications
+
   lab_result_interpretation:
     safety_critical: []
     required:

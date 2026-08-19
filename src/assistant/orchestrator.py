@@ -88,7 +88,10 @@ CLINICIAN_CONFIG = {
     "mode": CLINICIAN,
     "requirements_path": _CONFIG_DIR / "requirements_clinician.yaml",
     "capabilities_path": _CONFIG_DIR / "capabilities_clinician.yaml",
-    "evidence_sources": (E.GUIDELINES,),
+    # The society corpus is indexed by condition and answers nothing about a
+    # drug; `DRUG_LABELS` is the package insert, and only fires when a message
+    # names a medication the normaliser recognises.
+    "evidence_sources": (E.GUIDELINES, E.DRUG_LABELS),
     "triage_enabled": False,
 }
 

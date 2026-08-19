@@ -767,3 +767,70 @@ def test_a_reply_that_carries_facts_is_still_a_continuation():
     reply = bot.handle(sid, "her BUN is 54").reply
     assert "could not understand" not in reply.lower()
     assert bot.sessions[sid].context.get("bun_max") == 54.0
+
+
+# ── drug safety is about the drug; drug dosing is about the patient ──────────
+#
+# They share a vocabulary and need opposite things. A dose depends on this
+# patient's renal function; a contraindication list is the same sentence
+# whoever is being treated. While they were one intent, "what are the
+# contraindications for vancomycin?" inherited the dosing policy and was
+# answered by asking for a creatinine the answer never uses.
+
+@pytest.mark.parametrize("message,expected", [
+    ("What are the contraindications for vancomycin?", Intent.DRUG_SAFETY),
+    ("What are the side effects of enoxaparin?", Intent.DRUG_SAFETY),
+    ("Any drug interactions with meropenem?", Intent.DRUG_SAFETY),
+    ("Does vancomycin have a boxed warning?", Intent.DRUG_SAFETY),
+    # Patient-specific, and each one genuinely needs the renal function.
+    ("Can I give full-dose enoxaparin?", Intent.DRUG_DOSING),
+    ("What is the vancomycin dose in AKI?", Intent.DRUG_DOSING),
+    ("Is vancomycin nephrotoxic here?", Intent.DRUG_DOSING),
+    ("Should I hold the vancomycin?", Intent.DRUG_DOSING),
+])
+def test_drug_safety_and_drug_dosing_are_told_apart(message, expected):
+    assert classify(message, mode=CLINICIAN).intent is expected
+
+
+def test_a_case_handover_naming_a_drug_is_still_a_risk_question():
+    """The split must not reopen the failure the dosing lookbehinds fixed."""
+    res = classify("72F septic shock, creatinine 3.2, on vancomycin, "
+                   "what is her mortality risk?", mode=CLINICIAN)
+    assert res.intent is Intent.RISK_ASSESSMENT
+
+
+def test_drug_safety_needs_only_the_drug():
+    """A creatinine here would be a question whose answer is never used."""
+    reqs = for_intent(Intent.DRUG_SAFETY,
+                      path=POLICY_PATH.parent / "requirements_clinician.yaml")
+    assert "medication_name" in reqs.required
+    assert "creatinine_max" not in reqs.required
+    assert "creatinine_max" in reqs.optional
+
+
+def test_asking_about_a_drug_does_not_put_the_patient_on_it():
+    """
+    The reply cited a package insert *and* recorded the drug as therapy. The
+    completeness gate catches a missing value; nothing catches a value that
+    should never have been written, and the next turn would have scored a
+    patient on a medication they are not receiving.
+    """
+    bot = _clinician_bot()
+    sid = bot.start().state.session_id
+    bot.handle(sid, "72F septic shock, creatinine 3.2, BUN 61")
+    before = dict(bot.session(sid).context.to_dict()["current"])
+
+    bot.handle(sid, "What are the contraindications for vancomycin?")
+    after = dict(bot.session(sid).context.to_dict()["current"])
+
+    assert after == before
+    assert "vancomycin" not in str(after.get("active_medications", ""))
+
+
+def test_a_case_description_still_records_the_drugs_the_patient_is_on():
+    """The other half: the frame is what separates the two readings."""
+    bot = _clinician_bot()
+    sid = bot.start().state.session_id
+    bot.handle(sid, "72F septic shock on vancomycin and norepinephrine")
+    meds = bot.session(sid).context.to_dict()["current"].get("active_medications")
+    assert sorted(meds) == ["norepinephrine", "vancomycin"]

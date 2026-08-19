@@ -319,3 +319,96 @@ def test_answer_serialises_for_the_audit_trail(tmp_path):
     blob = A.compose(ctx, d, ev, requested_fields=["condition_name"]).to_dict()
     assert blob["status"] == A.ANSWERED
     assert blob["citations"]
+
+
+# ── drug labels: a question about the drug, not about the patient ────────────
+#
+# The corpus and the society guidelines are both indexed by *condition*, so
+# "what are the contraindications for vancomycin?" matched nothing in either.
+# With no drug-evidence path it fell to `drug_dosing` — the only intent that
+# knows what a drug name is — which requires a creatinine, so the reply to a
+# package-insert question was a request for a lab value the answer never uses.
+
+_LABEL = {
+    "results": [{
+        "openfda": {"brand_name": ["Vancocin"], "generic_name": ["vancomycin"]},
+        "boxed_warning": ["BOXED: nephrotoxicity risk."],
+        "contraindications": ["Known hypersensitivity to vancomycin."],
+        "drug_interactions": ["Additive nephrotoxicity with aminoglycosides."],
+    }]
+}
+
+
+class _FakeCache:
+    """Stands in for the shared HTTP cache. Tests must not reach OpenFDA."""
+
+    def __init__(self, payload=None, raises=None):
+        self.payload, self.raises, self.urls = payload, raises, []
+
+    def get_json(self, url, **_):
+        self.urls.append(url)
+        if self.raises is not None:
+            raise self.raises
+        return self.payload
+
+
+@pytest.fixture
+def fake_fda(monkeypatch):
+    def install(payload=None, raises=None):
+        cache = _FakeCache(payload, raises)
+        monkeypatch.setattr("src.llm.evidence_cache.get_default_cache",
+                            lambda *a, **k: cache)
+        return cache
+    return install
+
+
+def test_a_drug_label_is_retrieved_for_a_recognised_medication(fake_fda):
+    fake_fda(_LABEL)
+    docs = E._drug_label_docs(["vancomycin"], top_k=4)
+    assert [d.doc_id for d in docs] == ["fda_label_vancomycin"]
+    assert "CONTRAINDICATIONS" in docs[0].text
+
+
+def test_a_brand_name_is_resolved_before_the_label_is_asked_for(fake_fda):
+    """The endpoint is searched on generic name, so Levophed must not be sent."""
+    cache = fake_fda(_LABEL)
+    E._drug_label_docs(["Levophed"], top_k=4)
+    assert cache.urls and "norepinephrine" in cache.urls[0]
+    assert "levophed" not in cache.urls[0].lower()
+
+
+def test_an_unrecognised_word_is_never_sent_to_the_endpoint(fake_fda):
+    """Otherwise "septic shock" becomes a drug lookup, and then a citation."""
+    cache = fake_fda(_LABEL)
+    assert E._drug_label_docs(["septic shock", "why is he unwell"], top_k=4) == []
+    assert cache.urls == []
+
+
+def test_a_label_with_no_safety_sections_is_not_a_source(fake_fda):
+    """A document naming the drug and saying nothing is worse than none: the
+    answer stage may only use what retrieval returned, so it must decline."""
+    fake_fda({"results": [{"openfda": {"generic_name": ["vancomycin"]}}]})
+    assert E._drug_label_docs(["vancomycin"], top_k=4) == []
+
+
+def test_retrieval_failure_declines_rather_than_inventing_a_document(fake_fda):
+    from src.llm.evidence_cache import RetrievalUnavailable
+
+    fake_fda(raises=RetrievalUnavailable("network down"))
+    assert E._drug_label_docs(["vancomycin"], top_k=4) == []
+
+
+def test_a_label_is_tier_two_and_cites_the_fda(fake_fda):
+    """Tier 2 is the government band. A package insert is a regulatory document
+    about a product, not a society's recommendation for managing a patient."""
+    fake_fda(_LABEL)
+    doc = E._drug_label_docs(["vancomycin"], top_k=4)[0]
+    assert doc.source_tier == 2
+    assert doc.citation == "[FDA package insert: vancomycin]"
+    assert doc.review_status == "unreviewed"
+
+
+def test_drug_labels_are_off_unless_the_source_is_selected(fake_fda):
+    cache = fake_fda(_LABEL)
+    assert E.retrieve("vancomycin", sources=(E.GUIDELINES,)).documents == []
+    assert cache.urls == []
