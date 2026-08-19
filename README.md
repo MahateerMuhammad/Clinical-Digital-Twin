@@ -4,16 +4,16 @@
 
 **AI-powered Personalized Patient Simulator using MIMIC-IV**
 
-Dual-engine platform that combines calibrated risk models (trained on 534k+ hospital admissions) with a grounded RAG clinical assistant — predicting mortality, readmission, ICU need, length of stay, and deterioration from the first 24 hours of hospital data.
+Dual-engine platform that combines calibrated risk models (trained on 534k+ hospital admissions) with a grounded RAG clinical assistant - predicting mortality, readmission, ICU need, length of stay, and deterioration from the first 24 hours of hospital data.
 
-A research prototype — not a certified medical device.
+A research prototype - not a certified medical device.
 
 </div>
 
 ---
 
 > [!IMPORTANT]
-> This is a **research and portfolio prototype** built on de-identified MIMIC-IV data. It has **no authentication**, **no rate limiting**, and must **never receive real patient data**. Every generated text is verified against a closed-world fact store — if the grounding check fails, the output is withheld, not shown. The system **refuses rather than imputes**: an incomplete payload returns the list of missing fields, and a task whose feature coverage falls below the measured retention floor is named as withheld rather than scored.
+> This is a **research and portfolio prototype** built on de-identified MIMIC-IV data. It has **no authentication**, **no rate limiting**, and must **never receive real patient data**. Every generated text is verified against a closed-world fact store - if the grounding check fails, the output is withheld, not shown. The system **refuses rather than imputes**: an incomplete payload returns the list of missing fields, and a task whose feature coverage falls below the measured retention floor is named as withheld rather than scored.
 
 ---
 
@@ -23,7 +23,7 @@ A research prototype — not a certified medical device.
 Clinician enters patient data (labs, vitals, demographics, medications)
         │
         ▼
-Payload validation (deterministic — refuses if incomplete)
+Payload validation (deterministic - refuses if incomplete)
         │
         ▼
 Multi-task risk models (LightGBM/XGBoost, calibrated, from first 24h)
@@ -34,10 +34,10 @@ Multi-task risk models (LightGBM/XGBoost, calibrated, from first 24h)
   └── Clinical deterioration 48h    (AUROC 0.7858)
         │
         ▼
-SHAP explainability — which inputs drove each score
+SHAP explainability - which inputs drove each score
         │
         ▼
-Evidence retrieval — curated guideline corpus (KDIGO, ACC/AHA, SSC…)
+Evidence retrieval - curated guideline corpus (KDIGO, ACC/AHA, SSC…)
         │
         ▼
 Deterministic report composition (grounded by construction)
@@ -46,7 +46,7 @@ Deterministic report composition (grounded by construction)
 Optional LLM rephrase → grounding verifier → withhold if it invents
         │
         ▼
-Conversational assistant — multi-turn, with completeness gate
+Conversational assistant - multi-turn, with completeness gate
   ├── Ask what's missing before answering
   ├── Extract facts from free text
   ├── What-if counterfactual simulation
@@ -55,18 +55,34 @@ Conversational assistant — multi-turn, with completeness gate
 
 ---
 
+## Screenshots
+
+| Case Screen - Conversational assistant & real-time risk dashboard |
+|---|
+| ![Case Screen](docs/screenshots/case_screen.png) |
+
+| Session Timeline - Conversational exchange history | Evidence Browser - Curated offline guideline corpus |
+|---|---|
+| ![Session Timeline](docs/screenshots/timeline_screen.png) | ![Evidence Browser](docs/screenshots/evidence_screen.png) |
+
+| System Diagnostics - Health status, loaded models, & guideline counts |
+|---|
+| ![System Diagnostics](docs/screenshots/system_screen.png) |
+
+---
+
 ## Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Client["Frontend — Vite + React + TypeScript"]
+    subgraph Client["Frontend - Vite + React + TypeScript"]
         Case[Case Screen<br/>conversational interface]
         Timeline[Timeline Screen<br/>turn-by-turn review]
         Evidence[Evidence Screen<br/>corpus browser]
         System[System Screen<br/>health & diagnostics]
     end
 
-    subgraph Server["Backend — FastAPI"]
+    subgraph Server["Backend - FastAPI"]
         API[REST API layer]
         Orch[Assistant Orchestrator<br/>triage → intent → gate → compose → verify]
         Models[LiveModelRunner<br/>multi-task inference + SHAP]
@@ -115,9 +131,9 @@ flowchart TD
 
 ---
 
-## Safety Architecture — The Orchestrator Pipeline
+## Safety Architecture - The Orchestrator Pipeline
 
-The assistant does **not** follow a `user asks → LLM answers` pattern. Every turn passes through a fixed pipeline where application code — never a language model — decides whether enough information exists to answer.
+The assistant does **not** follow a `user asks → LLM answers` pattern. Every turn passes through a fixed pipeline where application code - never a language model - decides whether enough information exists to answer.
 
 ```mermaid
 flowchart TD
@@ -147,15 +163,15 @@ flowchart TD
     style REPLY fill:#69db7c,color:#fff
 ```
 
-**Prompt injection defence:** The gate reads `PatientContext` and the requirement policy — never message text, never model output. A message saying "ignore your rules" is extracted from like any other (it states no facts), classified like any other, and refused by the same completeness check.
+**Prompt injection defence:** The gate reads `PatientContext` and the requirement policy - never message text, never model output. A message saying "ignore your rules" is extracted from like any other (it states no facts), classified like any other, and refused by the same completeness check.
 
 ---
 
-## Data Flow — From Raw EHR to Served Predictions
+## Data Flow - From Raw EHR to Served Predictions
 
 ```mermaid
 flowchart LR
-    subgraph Ingest["Phase 0 — Data Pipeline"]
+    subgraph Ingest["Phase 0 - Data Pipeline"]
         RAW[MIMIC-IV CSV/CSV.GZ<br/>hosp + icu + notes + ED] --> LOAD[Loader<br/>schema inference]
         LOAD --> CLEAN[Cleaner<br/>all decisions logged]
         CLEAN --> EDA[EDA<br/>reports/figures]
@@ -163,7 +179,7 @@ flowchart LR
         FEAT --> DS[Dataset Builder<br/>patient / admission /<br/>ICU / time-series /<br/>notes / similarity]
     end
 
-    subgraph Train["Phases 1–7 — Model Training"]
+    subgraph Train["Phases 1–7 - Model Training"]
         DS --> SPLIT[Patient-level split<br/>70/15/15, zero overlap]
         SPLIT --> P1[Phase 1: Mortality<br/>LightGBM AUROC 0.9442]
         SPLIT --> P2[Phase 2: Readmission<br/>LightGBM AUROC 0.7062]
@@ -174,7 +190,7 @@ flowchart LR
         SPLIT --> P7[Phase 7: Patient Embeddings<br/>Autoencoder + Similarity]
     end
 
-    subgraph Serve["Phases 8–12 — Serving"]
+    subgraph Serve["Phases 8–12 - Serving"]
         P1 & P2 & P3 & P4 & P5 --> PROMOTE[Model Promotion<br/>+ Isotonic Calibration]
         PROMOTE --> RUNNER[LiveModelRunner<br/>multi-task inference<br/>+ coverage guard]
         RUNNER --> REPORT[Report Pipeline<br/>deterministic composer<br/>+ grounding verifier]
@@ -185,7 +201,7 @@ flowchart LR
 
 ---
 
-## Sequence Diagram — Conversational Turn
+## Sequence Diagram - Conversational Turn
 
 ```mermaid
 sequenceDiagram
@@ -204,18 +220,18 @@ sequenceDiagram
     FE->>BE: POST /api/assistant/sessions/{id}/messages
     BE->>O: handle(session_id, message)
 
-    Note over O: Step 1 — Triage
+    Note over O: Step 1 - Triage
     O->>O: Check red-flag patterns
     alt Emergency detected
         O-->>BE: Emergency response (no collection)
         BE-->>FE: TurnResponse (severity=emergency)
     end
 
-    Note over O: Step 2 — Intent + Requirements
+    Note over O: Step 2 - Intent + Requirements
     O->>O: Classify intent (risk_assessment, guideline_lookup, ...)
     O->>O: Load requirement set for intent
 
-    Note over O: Step 3 — Extraction
+    Note over O: Step 3 - Extraction
     alt LLM backend available
         O->>X: Extract facts (scoped to required fields)
         X->>LLM: Structured extraction prompt
@@ -224,7 +240,7 @@ sequenceDiagram
         O->>X: Pattern-based extraction
     end
 
-    Note over O: Step 4 — Completeness Gate
+    Note over O: Step 4 - Completeness Gate
     O->>G: Evaluate context vs requirements
     alt Gate closed
         G-->>O: Missing fields list
@@ -233,28 +249,28 @@ sequenceDiagram
         FE-->>C: Show "needs more information" + questions
     end
 
-    Note over O: Step 5 — Evidence
+    Note over O: Step 5 - Evidence
     O->>R: Retrieve guidelines for diagnosis
     alt No evidence
         R-->>O: Empty
         O-->>BE: Decline (no source on file)
     end
 
-    Note over O: Step 6 — Compose
+    Note over O: Step 6 - Compose
     alt Risk assessment intent
         O->>M: run_live_inference_with_uncertainty(payload)
         M-->>O: Probabilities + SHAP drivers + risk tier
     end
     O->>O: Deterministic report composition
 
-    Note over O: Step 7 — Verify
+    Note over O: Step 7 - Verify
     O->>GR: verify_text(generated_text, fact_store)
     alt Verification failed
         GR-->>O: Violations list
         O-->>BE: Withhold (use deterministic text)
     end
 
-    Note over O: Step 8 — Audit + Reply
+    Note over O: Step 8 - Audit + Reply
     O->>O: Write audit log
     O-->>BE: TurnResult
     BE-->>FE: TurnResponse (reply, predictions, sources, verified)
@@ -263,7 +279,7 @@ sequenceDiagram
 
 ---
 
-## Sequence Diagram — What-If Counterfactual
+## Sequence Diagram - What-If Counterfactual
 
 ```mermaid
 sequenceDiagram
@@ -290,10 +306,10 @@ sequenceDiagram
 | 1 | In-hospital mortality | LightGBM (calibrated) | **0.9442** | 0.3800 | 164 features, strict 24h window |
 | 2 | 30-day readmission | LightGBM (calibrated) | **0.7062** | 0.4195 | Prior utilisation features critical |
 | 3 | ICU admission | LightGBM (calibrated) | **0.9209** | 0.5369 | t=0 timing discipline, no post-ICU leakage |
-| 4 | Hospital LOS (Stage A) | LightGBM (calibrated) | **0.8997** | — | Long-stay threshold: 5.63 days |
-| 5 | Deterioration (48h) | LightGBM (calibrated) | **0.7858** | — | Landmark design, replaces 6h case-control |
-| 6 | Mortality (sequence) | LSTM / Transformer | — | — | Minute-level vital trend analysis |
-| 7 | Patient similarity | Autoencoder (5 variants) | — | — | 32-d embedding, NumPy forward pass for serving |
+| 4 | Hospital LOS (Stage A) | LightGBM (calibrated) | **0.8997** | - | Long-stay threshold: 5.63 days |
+| 5 | Deterioration (48h) | LightGBM (calibrated) | **0.7858** | - | Landmark design, replaces 6h case-control |
+| 6 | Mortality (sequence) | LSTM / Transformer | - | - | Minute-level vital trend analysis |
+| 7 | Patient similarity | Autoencoder (5 variants) | - | - | 32-d embedding, NumPy forward pass for serving |
 
 **Risk tiers** (from Phase 9 stratification on the 2026-08-01 model):
 
@@ -304,7 +320,7 @@ sequenceDiagram
 | 3 | High Risk | 3.79% |
 | 4 | Extreme Risk | 25.24% |
 
-**Payload fidelity** — AUROC retained when only an unseen-patient payload (no full admission row) is supplied:
+**Payload fidelity** - AUROC retained when only an unseen-patient payload (no full admission row) is supplied:
 
 | Task | Reference AUROC | Payload AUROC | Retention | Served? |
 |:-----|----------------:|--------------:|----------:|:--------|
@@ -324,14 +340,14 @@ Tasks below the two-thirds retention floor are withheld with the reason, never s
 |:------|:-------|:----|
 | **Frontend** | Vite + React 19 + TypeScript | Typed, fast HMR, CSS Modules for scoped styling |
 | **Routing** | react-router-dom v7 | Four-screen layout: Case, Timeline, Evidence, System |
-| **Styling** | CSS Modules + design tokens (`tokens.css`) | No utility framework — full control over a clinical design system |
+| **Styling** | CSS Modules + design tokens (`tokens.css`) | No utility framework - full control over a clinical design system |
 | **Backend** | FastAPI (Python) | Async-friendly, typed routes, lifespan events for model loading |
 | **Risk Models** | LightGBM + XGBoost (scikit-learn calibrators) | Gradient-boosted trees fitted on 534k MIMIC-IV admissions |
 | **Sequence Models** | PyTorch (LSTM + Transformer) | Minute-level vital trend analysis (offline training only) |
 | **Embeddings** | Patient Autoencoder → NumPy forward pass | 5 training variants (vanilla, triplet, SupCon, LGB-leaf, sequential); served without torch |
 | **Explainability** | SHAP | TreeExplainer for per-prediction feature attribution |
 | **LLM** | Gemini 3.7 Flash / OpenRouter / Ollama | Fact extraction + optional rephrase; deterministic fallback when absent |
-| **Grounding** | `FactStore` + `verify_text` | Closed-world verification — every number must trace to an input |
+| **Grounding** | `FactStore` + `verify_text` | Closed-world verification - every number must trace to an input |
 | **RAG** | TF-IDF retrieval + PubMed + curated guidelines | 23 guideline records across 15 ICU conditions (KDIGO, SSC, ACC/AHA, …) |
 | **Data format** | Parquet (Snappy) | Columnar, typed, reproducible; no CSV outputs for processed data |
 | **Testing** | pytest (42 test files) | Adversarial, policy, fidelity, grounding, RAG robustness suites |
@@ -552,7 +568,7 @@ mindmap
 - **Python 3.12** (3.14 lacks `pydantic-core` wheels; pinned deps verified on 3.12.13)
 - **Node.js** (for the frontend)
 - **MIMIC-IV access** ([PhysioNet credentialing](https://physionet.org/content/mimiciv/))
-- A **Gemini API key** (free) or **OpenRouter API key** (free tier) — *optional*, the system works end-to-end without one
+- A **Gemini API key** (free) or **OpenRouter API key** (free tier) - *optional*, the system works end-to-end without one
 
 ### 1. Environment setup
 
@@ -583,7 +599,7 @@ python scripts/pipelines/run_pipeline.py --skip-large
 # Standard mode (samples large tables via chunked reading)
 python scripts/pipelines/run_pipeline.py
 
-# Full mode (loads entire tables — may take hours and needs RAM)
+# Full mode (loads entire tables - may take hours and needs RAM)
 python scripts/pipelines/run_pipeline.py --full
 ```
 
@@ -610,7 +626,7 @@ python scripts/maintenance/recompute_risk_tiers.py --patch --write-report
 ```bash
 cp .env.example .env
 # Fill in CDT_LLM_API_KEY (Gemini) or OPENROUTER_API_KEY
-# Everything else has working defaults — see .env.example for docs
+# Everything else has working defaults - see .env.example for docs
 ```
 
 ### 7. Start the backend
@@ -639,7 +655,7 @@ npm run dev
 |:-------|:-----|:--------|
 | `GET` | `/api/health` | Liveness: what loaded, corpus counts, reviewed-record count |
 | `GET` | `/api/models/describe` | Loaded models, their features, promoted metrics |
-| `POST` | `/api/models/validate` | Check a payload without scoring — needs no models |
+| `POST` | `/api/models/validate` | Check a payload without scoring - needs no models |
 | `POST` | `/api/models/predict` | Multi-task risk with calibration and uncertainty |
 | `POST` | `/api/models/report` | Full grounded clinical report (deterministic + optional LLM rephrase) |
 | `POST` | `/api/models/whatif` | Re-score with one or more inputs changed |
@@ -667,7 +683,7 @@ npm run dev
 
 ## Grounding: Why a FactStore and Not Just a Prompt
 
-Every number and clinical claim the LLM emits must already exist in structured inputs — the validated payload, the model predictions, or the retrieved evidence. `verify_text` scans generated text and returns every violation, so the caller can regenerate, redact, or refuse.
+Every number and clinical claim the LLM emits must already exist in structured inputs - the validated payload, the model predictions, or the retrieved evidence. `verify_text` scans generated text and returns every violation, so the caller can regenerate, redact, or refuse.
 
 ```mermaid
 flowchart LR
@@ -766,7 +782,7 @@ python -m pytest tests/test_llm_grounding.py -v
 
 ## Environment Variables
 
-Set in `.env` (preferred) or the shell. Every variable is optional — with none set, the system runs end-to-end using deterministic patterns.
+Set in `.env` (preferred) or the shell. Every variable is optional - with none set, the system runs end-to-end using deterministic patterns.
 
 | Variable | Effect |
 |:---------|:-------|
@@ -776,7 +792,7 @@ Set in `.env` (preferred) or the shell. Every variable is optional — with none
 | `CDT_JUDGE_MODEL` | Model for LLM-as-judge evaluation (default `gemini-3.5-flash`) |
 | `CDT_OPENROUTER_BASE_URL` | Provider endpoint; default points to Gemini |
 | `CDT_OPENROUTER_TIMEOUT` | Request timeout in seconds (default 30) |
-| `CDT_OPENROUTER_REASONING` | `off` / `low` / `medium` / `high` (default `off` — reasoning burns completion budget) |
+| `CDT_OPENROUTER_REASONING` | `off` / `low` / `medium` / `high` (default `off` - reasoning burns completion budget) |
 | `CDT_LLM_MODEL` | Local Ollama model (e.g. `qwen2.5:3b-instruct`) |
 | `CDT_ASSISTANT_DEBUG` | `1` to attach gate/extraction/faithfulness debug info to responses |
 | `CDT_CORS_ORIGINS` | Comma-separated allowed origins |
@@ -785,15 +801,15 @@ Set in `.env` (preferred) or the shell. Every variable is optional — with none
 
 ## Design Principles
 
-- **No silent data removal** — all cleaning actions are logged with counts and reasons
-- **Refuse rather than impute** — missing fields are named, never filled silently
-- **Parquet only** — no CSV outputs for processed data; typed, columnar, reproducible
-- **Chunked I/O** — handles 40GB+ chartevents via streaming aggregation
-- **Reproducible** — central config, pinned dependencies (`==`), random seeds
-- **Grounded by construction** — deterministic composer produces text that passes verification by design
-- **LLM is optional and verifiable** — the system works end-to-end without any LLM; when present, output is verified
-- **Gate decides, not the model** — application code determines completeness; the LLM cannot override it
-- **Explicit withholding** — a task below the retention floor says why, rather than showing zero
+- **No silent data removal** - all cleaning actions are logged with counts and reasons
+- **Refuse rather than impute** - missing fields are named, never filled silently
+- **Parquet only** - no CSV outputs for processed data; typed, columnar, reproducible
+- **Chunked I/O** - handles 40GB+ chartevents via streaming aggregation
+- **Reproducible** - central config, pinned dependencies (`==`), random seeds
+- **Grounded by construction** - deterministic composer produces text that passes verification by design
+- **LLM is optional and verifiable** - the system works end-to-end without any LLM; when present, output is verified
+- **Gate decides, not the model** - application code determines completeness; the LLM cannot override it
+- **Explicit withholding** - a task below the retention floor says why, rather than showing zero
 
 ---
 
@@ -807,7 +823,7 @@ Set in `.env` (preferred) or the shell. Every variable is optional — with none
 - **No output-side safety check on LLM replies** beyond grounding. System prompts hard-constrain the model, verified against direct adversarial prompts during testing, but there's no automated classifier checking reply content.
 - **66 ED features exist and reach no model.** Adoption needs a dataset rebuild and a Phase 1–5 retrain.
 - **No real authentication.** Sessions are in-memory, single-worker. Designed for localhost development.
-- **`labevents.csv` may be a partial download** (~14M of ~122M rows) — flagged in all reports.
+- **`labevents.csv` may be a partial download** (~14M of ~122M rows) - flagged in all reports.
 - **torch segfaults on macOS x86_64** when co-loaded with LightGBM. Serving uses NumPy-only forward pass.
 
 ---
@@ -815,9 +831,9 @@ Set in `.env` (preferred) or the shell. Every variable is optional — with none
 ## Roadmap
 
 ### Up next
-- **Deploy the backend** (Railway/Render) — frontend can point to localhost today
-- **Real authentication** (JWT) — schema designed so this only adds a `user_id` column
-- **Clinician review** of the guideline corpus — the single biggest trust gap
+- **Deploy the backend** (Railway/Render) - frontend can point to localhost today
+- **Real authentication** (JWT) - schema designed so this only adds a `user_id` column
+- **Clinician review** of the guideline corpus - the single biggest trust gap
 
 ### Later
 - Multilingual support (Urdu, Arabic, French)
@@ -828,11 +844,11 @@ Set in `.env` (preferred) or the shell. Every variable is optional — with none
 - Per-endpoint rate limiting before any public deployment
 
 ### Explicitly avoided (and why)
-- **LSTM/Transformer trend prediction for individual patients** — with fewer than 10 data points per patient, this is statistically meaningless. Trend analysis operates on the full cohort, not individual forecasting.
-- **Sending raw reports or patient identifiers to the LLM** — the extraction prompt receives only the user's typed message; the risk models and report composer see only structured fields.
-- **PaddleOCR** — too heavy for the hosting tier; causes OOM/timeouts.
-- **torch in production** — segfaults on the target platform; NumPy forward pass serves equivalently.
-- **Per-task uncertainty scores** — the model reports one confidence label for the whole inference; manufacturing per-task numbers would show precision the models do not have.
+- **LSTM/Transformer trend prediction for individual patients** - with fewer than 10 data points per patient, this is statistically meaningless. Trend analysis operates on the full cohort, not individual forecasting.
+- **Sending raw reports or patient identifiers to the LLM** - the extraction prompt receives only the user's typed message; the risk models and report composer see only structured fields.
+- **PaddleOCR** - too heavy for the hosting tier; causes OOM/timeouts.
+- **torch in production** - segfaults on the target platform; NumPy forward pass serves equivalently.
+- **Per-task uncertainty scores** - the model reports one confidence label for the whole inference; manufacturing per-task numbers would show precision the models do not have.
 
 ---
 
@@ -866,4 +882,4 @@ MIMIC-IV data use requires [PhysioNet credentialing](https://physionet.org/conte
 
 ## Disclaimer
 
-The Clinical Digital Twin is a research prototype. It is not a certified medical device, does not provide medical advice, and must never be used as a substitute for consulting a qualified healthcare professional. It must never receive real patient data. All generated text is verified against structured inputs — if verification fails, the output is withheld, not shown.
+The Clinical Digital Twin is a research prototype. It is not a certified medical device, does not provide medical advice, and must never be used as a substitute for consulting a qualified healthcare professional. It must never receive real patient data. All generated text is verified against structured inputs - if verification fails, the output is withheld, not shown.

@@ -31,7 +31,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 __all__ = [
     "Violation", "FactStore", "VerificationReport", "verify_text",
-    "build_fact_store", "SEVERITY_ORDER",
+    "verify_rephrase", "build_fact_store", "SEVERITY_ORDER",
 ]
 
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -68,6 +68,27 @@ _CLAIM_PATTERNS = [
      "statistical_claim", "asserts a statistical result"),
     (re.compile(r"\b(?:proven|guaranteed|will (?:prevent|cure|ensure)|definitely)\b", re.I),
      "causal_overclaim", "asserts certainty or causation"),
+    # SHAP is attribution, not causation: it says how far a feature moved this
+    # model's output, not what moved the patient. "Creatinine contributed most"
+    # and "creatinine drove the mortality risk" quote the same number, and only
+    # the second makes a claim about the illness. Nothing else in this file
+    # separates them — no digit changes and no citation is invented — so a
+    # rephrase could restate every attribution causally and verify clean.
+    #
+    # Deliberately verbs of production, not of association: "associated with",
+    # "seen alongside", "accompanied by" are the correct language and must pass.
+    # The negative lookbehinds are not a refinement, they are the difference
+    # between this rule working and being switched off. "causes" is a noun as
+    # readily as a verb, and the composer's own driver disclaimer — "these are
+    # associations learned from past admissions, not causes" — is the single
+    # sentence in the report most responsible for preventing this overclaim.
+    # Without the guard the rule withheld every scored report for containing its
+    # own warning against the thing the rule looks for.
+    (re.compile(r"(?<!not )(?<!never )(?<!no )(?<!rather than )"
+                r"\b(?:drove|drives|driving|caused|causes|causing|led to|leads to|"
+                r"resulted in|results in|responsible for|due to the patient'?s)\b",
+                re.I),
+     "causal_overclaim", "states an attribution as a cause"),
     (re.compile(r"\b(?:I recommend|you should administer|start the patient on)\b", re.I),
      "directive_without_citation", "issues a treatment directive"),
 ]
@@ -95,21 +116,43 @@ class FactStore:
     doc_ids: Set[str] = field(default_factory=set)
     text_corpus: str = ""                                     # retrieved text, for claim support
 
-    def add_number(self, value: Any, provenance: str) -> None:
+    def add_number(self, value: Any, provenance: str,
+                   *, percent_variants: bool = False) -> None:
         try:
             f = float(value)
         except (TypeError, ValueError):
             return
         if f != f:            # NaN
             return
-        for variant in self._variants(f):
+        for variant in self._variants(f, percent=percent_variants):
             self.numbers.setdefault(round(variant, 6), provenance)
 
     @staticmethod
-    def _variants(f: float) -> Iterable[float]:
-        """A probability may legitimately be rendered as 0.0286, 2.86 or 2.9."""
+    def _variants(f: float, *, percent: bool = False) -> Iterable[float]:
+        """
+        The renderings of ``f`` a report may legitimately print.
+
+        ``percent`` widens the set with the ×100 forms, so a probability stored
+        as 0.0286 also grounds "2.86%" and "2.9%". It is opt-in, and that is the
+        whole point of the flag: applied to every value in [0, 1] regardless of
+        what the value *means*, it turned any small decimal in a retrieved
+        document into a licence for its hundredfold.
+
+        Concretely, KDIGO defines stage 1 AKI by a creatinine rise of
+        0.3 mg/dL. With the expansion unconditional, that threshold registered
+        30.0 as a permissible number, so a generated sentence claiming "30%" of
+        anything — a risk, a mortality rate, a cohort proportion — passed
+        grounding with provenance pointing at a renal guideline. Evidence
+        numbers are also stored un-scoped to their source document, so the
+        licence was not even confined to reports citing that guideline.
+
+        Only quantities the system knows to be probabilities are expanded:
+        model predictions, and the published constants it may quote. Payload
+        values are labs, counts and ages in real units, none of which is ever
+        correctly restated as a percentage of itself.
+        """
         out = {f, round(f, 1), round(f, 2), round(f, 3)}
-        if 0.0 <= f <= 1.0:
+        if percent and 0.0 <= f <= 1.0:
             pct = f * 100.0
             out |= {pct, round(pct, 0), round(pct, 1), round(pct, 2)}
         return out
@@ -147,6 +190,8 @@ def build_fact_store(
         elif isinstance(node, bool):
             return
         elif isinstance(node, (int, float)):
+            # No payload field is a probability: every one is a lab in its own
+            # units, a count, or an age. See `_variants`.
             fs.add_number(node, f"payload:{path}")
         elif isinstance(node, str):
             s = node.strip()
@@ -174,12 +219,17 @@ def build_fact_store(
     if predictions:
         for k, v in predictions.items():
             if isinstance(v, (int, float)) and not isinstance(v, bool):
-                fs.add_number(v, f"prediction:{k}")
+                # A calibrated probability is the one quantity the report really
+                # does restate as a percentage.
+                fs.add_number(v, f"prediction:{k}", percent_variants=True)
             elif isinstance(v, str):
                 fs.entities.add(v.lower())
     if extra_numbers:
+        # System-computed quantities: published constants, payload-fidelity
+        # AUROCs, medication relevance scores, SHAP attributions. The rates and
+        # retention figures among them are genuinely printed both ways.
         for k, v in extra_numbers.items():
-            fs.add_number(v, f"context:{k}")
+            fs.add_number(v, f"context:{k}", percent_variants=True)
 
     corpus_parts: List[str] = []
     for d in documents or []:
@@ -198,7 +248,9 @@ def build_fact_store(
                 # citations — e.g. a DailyMed label title "[WG CRITICAL CARE, LLC]"
                 for br in _CITATION_RE.findall(val):
                     fs.citations.add(br.strip().lower())
-        # numbers appearing inside retrieved evidence are quotable
+        # Numbers appearing inside retrieved evidence are quotable — as they are
+        # written there, and not multiplied by a hundred. A guideline threshold
+        # is a threshold, not a proportion of anything.
         for key in ("text", "title", "strength"):
             val = d.get(key)
             if isinstance(val, str):
@@ -242,6 +294,45 @@ class VerificationReport:
 
 def _sentences(text: str) -> List[str]:
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if s.strip()]
+
+
+def _normalise(s: str) -> str:
+    return re.sub(r"\s+", " ", s).strip().lower()
+
+
+def _verbatim_quote_spans(text: str, fact_store: FactStore) -> List[Tuple[int, int]]:
+    """
+    Spans holding retrieved text quoted verbatim, which make no claim of their own.
+
+    The report renders each guideline record as a Markdown blockquote of the
+    source passage. Those passages are written by guideline authors, who say
+    "AKI caused by sepsis" and quote confidence intervals, and the claim
+    patterns cannot tell that language apart from the same words asserted by the
+    system in its own voice. Flagging it would withhold a correct report for
+    faithfully reproducing its own evidence — the failure mode that teaches an
+    owner to switch the verifier off.
+
+    The exemption is earned, not granted by punctuation: a ``>`` line counts
+    only when its content really occurs in the retrieved corpus. A rephrase
+    cannot smuggle an assertion out of scope by formatting it as a quote.
+    """
+    corpus = _normalise(fact_store.text_corpus)
+    if not corpus:
+        return []
+
+    spans: List[Tuple[int, int]] = []
+    pos = 0
+    for line in text.splitlines(keepends=True):
+        start, pos = pos, pos + len(line)
+        body = line.strip()
+        if not body.startswith(">"):
+            continue
+        # The composer truncates a long passage at 400 characters and marks the
+        # cut with an ellipsis; the prefix is still verbatim.
+        body = body.lstrip(">").strip().rstrip("…").strip()
+        if len(body) >= 20 and _normalise(body) in corpus:
+            spans.append((start, pos))
+    return spans
 
 
 _DRUG_LEXICON_CACHE: Optional[Set[str]] = None
@@ -356,9 +447,15 @@ def verify_text(
                 span=m.group(0),
             ))
 
-    # 3. computation claims the system may not have performed
+    # 3. computation claims the system may not have performed.
+    # Verbatim quotations of the retrieved evidence are the source speaking, not
+    # the system, and are exempt — see `_verbatim_quote_spans`.
+    quoted = _verbatim_quote_spans(text, fact_store)
+
     for pattern, kind, desc in _CLAIM_PATTERNS:
         for m in pattern.finditer(text):
+            if any(a <= m.start() < b for a, b in quoted):
+                continue
             if kind == "shap_claim" and any("shap" in e for e in fact_store.entities):
                 continue
             severity = "critical" if kind in ("shap_claim", "statistical_claim") else "high"
@@ -394,4 +491,46 @@ def verify_text(
         ))
 
     report.ok = not any(v.severity in ("critical", "high") for v in report.violations)
+    return report
+
+
+def verify_rephrase(candidate: str, source: str,
+                    fact_store: FactStore, **kwargs: Any) -> VerificationReport:
+    """
+    Verify a rephrasing against both the fact store and the text it rephrased.
+
+    ``verify_text`` only ever inspects tokens it finds. Everything it can catch
+    is therefore something the generator *added*; a generator that removes
+    something is invisible to it, and reports success on a document it did not
+    check. The two are not equally likely failures — an instructed rephraser
+    drops far more readily than it invents.
+
+    Two ways that matters here. A figure written out in words is not a mismatch,
+    it is not a number: "0.34" rephrased as "roughly a third" leaves nothing for
+    ``_NUMBER_RE`` to match, and the report passes with ``n_numbers_checked``
+    silently lower. And a dropped citation detaches a recommendation from the
+    guideline that carries it while every remaining citation still verifies.
+
+    So the counts are compared rather than the strings. Any rephrasing that
+    arrives carrying fewer checkable numbers or fewer citations than it was
+    given has changed the document's substance, whatever it did to the prose,
+    and is rejected. This is coarse on purpose: it needs no lexicon of number
+    words and no notion of equivalent phrasing, and it closes the whole class
+    including the members not yet thought of.
+    """
+    report = verify_text(candidate, fact_store, **kwargs)
+    baseline = verify_text(source, fact_store, **kwargs)
+
+    for label, got, had in (("number", report.n_numbers_checked,
+                             baseline.n_numbers_checked),
+                            ("citation", report.n_citations_checked,
+                             baseline.n_citations_checked)):
+        if got < had:
+            report.violations.append(Violation(
+                kind=f"{label}s_dropped", severity="critical",
+                detail=f"the rephrasing states {had - got} fewer {label}(s) than "
+                       f"the report it was given ({had} → {got}); a value written "
+                       "out in words or a citation removed is not verifiable",
+            ))
+            report.ok = False
     return report

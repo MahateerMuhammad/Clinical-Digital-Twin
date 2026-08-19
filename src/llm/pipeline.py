@@ -22,7 +22,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from src.llm.grounding import build_fact_store, verify_text
+from src.llm.grounding import build_fact_store, verify_rephrase, verify_text
 from src.llm.payload_validation import validate_payload
 from src.llm.report_composer import (
     SYSTEM_CONSTANTS, _payload_fidelity_constants, compose_report,
@@ -324,7 +324,10 @@ class ClinicalReportPipeline:
                     deterministic_md,
                     system_prompt=self.system_prompt(),
                 )
-                check = verify_text(candidate, fact_store)
+                # Verified against the deterministic text as well as the fact
+                # store: the rephrase is the one stage that can *lose* content,
+                # and a plain fact-store check cannot see an omission.
+                check = verify_rephrase(candidate, deterministic_md, fact_store)
                 res.grounding = check.to_dict()
                 if check.ok:
                     res.report_markdown = candidate

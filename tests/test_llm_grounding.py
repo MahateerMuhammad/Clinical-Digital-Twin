@@ -31,7 +31,8 @@ if "torch" not in sys.modules:
         sys.modules["torch"] = _t
 
 from src.llm.backends import NullBackend                      # noqa: E402
-from src.llm.grounding import build_fact_store, verify_text   # noqa: E402
+from src.llm.grounding import (                               # noqa: E402
+    build_fact_store, verify_rephrase, verify_text)
 from src.llm.pipeline import ClinicalReportPipeline           # noqa: E402
 from src.llm.report_composer import (                        # noqa: E402
     SYSTEM_CONSTANTS,
@@ -454,6 +455,158 @@ def test_a_genuinely_invented_number_is_still_caught():
                              documents=[])
     result = verify_text("The patient's creatinine was 7.4 mg/dL.", store)
     assert any(v.kind == "ungrounded_number" for v in result.violations)
+
+
+class VerifierBlindSpotTests(unittest.TestCase):
+    """
+    Failures a fact-store check cannot see, and the narrowest fixes for them.
+
+    Everything above tests the verifier against text that *invents* something.
+    These test it against text that keeps every number and every citation
+    intact and still changes what the document says — the class of failure a
+    rephrasing model is most likely to produce, because it is the class its
+    instructions do not obviously forbid.
+    """
+
+    #: A guideline passage carrying a sub-1.0 threshold, a causal clause and a
+    #: confidence interval — all three legitimate in a source, none of them
+    #: things the system may assert in its own voice.
+    QUOTE = ("In patients with stage 2 or 3 AKI, discontinue nephrotoxic agents. "
+             "Acute kidney injury caused by sepsis carries higher mortality "
+             "(95% CI 1.2-2.4). A creatinine rise of 0.3 mg/dL within 48 hours "
+             "defines stage 1.")
+
+    def _store(self):
+        return build_fact_store(
+            payload={"creatinine_max": 3.2},
+            predictions={"p_mortality": 0.34},
+            documents=[{"doc_id": "KDIGO-AKI", "citation": "KDIGO AKI 2012 2.1",
+                        "title": "KDIGO AKI", "text": self.QUOTE}],
+            extra_numbers={"phase9_tier3_observed_mortality_pct": 3.79},
+        )
+
+    def test_a_guideline_threshold_does_not_license_its_hundredfold(self):
+        """
+        0.3 mg/dL in a retrieved document must not ground "30%".
+
+        The percentage expansion was applied to every value in [0, 1] whatever
+        it meant, so KDIGO's stage-1 creatinine threshold registered 30.0 as a
+        permissible number. Evidence numbers are stored un-scoped to their
+        document, so any report could then state 30% of anything and verify
+        clean, with provenance pointing at a renal guideline.
+        """
+        r = verify_text("Estimated mortality 30%.", self._store())
+        self.assertFalse(r.ok)
+        self.assertIn("ungrounded_number", {v.kind for v in r.violations})
+
+    def test_a_probability_is_still_rendered_as_a_percentage(self):
+        """The expansion is scoped, not removed: predictions keep both forms."""
+        store = self._store()
+        for text in ("Estimated mortality 34.0%.", "Mortality probability 0.34.",
+                     "3.79% of patients in this band died in hospital."):
+            self.assertTrue(verify_text(text, store).ok, text)
+
+    def test_an_evidence_number_is_quotable_as_written(self):
+        r = verify_text("A rise of 0.3 mg/dL defines stage 1.", self._store())
+        self.assertTrue(r.ok)
+
+    def test_an_attribution_restated_as_a_cause_is_rejected(self):
+        """
+        SHAP says what moved the model, not what moved the patient.
+
+        No number changes between "creatinine contributed most" and "creatinine
+        drove the mortality risk", and no citation is invented, so every other
+        check in this module passes both.
+        """
+        for text in ("Elevated creatinine of 3.2 drove the mortality risk to 34.0%.",
+                     "Renal failure caused the estimate of 34.0%.",
+                     "The creatinine of 3.2 resulted in a higher estimate."):
+            r = verify_text(text, self._store())
+            self.assertFalse(r.ok, text)
+            self.assertIn("causal_overclaim", {v.kind for v in r.violations})
+
+    def test_attribution_and_association_language_survives(self):
+        """
+        The correct wording must not be collateral damage.
+
+        A verifier that rejects the language the composer actually emits does
+        not make the system stricter, it makes the check something its owner
+        turns off.
+        """
+        for text in ("Creatinine, peak 3.2 made the largest contribution.",
+                     "A creatinine of 3.2 is associated with a higher estimate.",
+                     "Estimated mortality 34.0%, seen alongside a creatinine of 3.2.",
+                     # The composer's own driver disclaimer. A rule that flags
+                     # this withholds every scored report for carrying the
+                     # warning against the thing the rule looks for.
+                     "These are associations learned from past admissions, not "
+                     "causes, and changing one would not change the outcome."):
+            self.assertTrue(verify_text(text, self._store()).ok, text)
+
+    def test_a_verbatim_guideline_quotation_is_the_source_speaking(self):
+        """
+        Guideline authors write "caused by" and quote intervals; reproducing
+        them faithfully is not the system making the claim.
+        """
+        self.assertTrue(verify_text("> " + self.QUOTE, self._store()).ok)
+
+    def test_a_claim_cannot_hide_inside_a_fabricated_quotation(self):
+        """The exemption is earned by matching the corpus, not by a '>'."""
+        r = verify_text("> Creatinine drove the mortality risk in this patient.",
+                        self._store())
+        self.assertFalse(r.ok)
+        self.assertIn("causal_overclaim", {v.kind for v in r.violations})
+
+
+class RephraseOmissionTests(unittest.TestCase):
+    """
+    ``verify_text`` inspects only what it finds, so it can only ever catch what
+    a generator added. These cover what a generator removed.
+    """
+
+    SOURCE = ("Estimated mortality 34.0%. Readmission 21.0%. "
+              "Hold nephrotoxic agents [KDIGO AKI 2012 2.1].")
+
+    def _store(self):
+        return build_fact_store(
+            payload={}, predictions={"p_mortality": 0.34, "p_readmission": 0.21},
+            documents=[{"doc_id": "KDIGO-AKI", "citation": "KDIGO AKI 2012 2.1",
+                        "title": "KDIGO AKI", "text": "Hold nephrotoxic agents."}])
+
+    def test_a_faithful_rewording_passes(self):
+        cand = ("Estimated mortality is 34.0% and readmission 21.0%. "
+                "Nephrotoxic agents should be held [KDIGO AKI 2012 2.1].")
+        self.assertTrue(verify_rephrase(cand, self.SOURCE, self._store()).ok)
+
+    def test_a_number_written_out_in_words_is_rejected(self):
+        """
+        "0.34" rephrased as "roughly a third" is not a mismatch — it is not a
+        number, so nothing is checked and the report passes on a claim the
+        verifier never read.
+        """
+        cand = ("Mortality is roughly a third. Readmission 21.0%. "
+                "Hold nephrotoxic agents [KDIGO AKI 2012 2.1].")
+        r = verify_rephrase(cand, self.SOURCE, self._store())
+        self.assertFalse(r.ok)
+        self.assertIn("numbers_dropped", {v.kind for v in r.violations})
+
+    def test_a_dropped_citation_is_rejected(self):
+        """Every surviving citation still verifies; the recommendation is now
+        detached from the guideline that carries it."""
+        cand = "Estimated mortality 34.0%. Readmission 21.0%. Hold nephrotoxic agents."
+        r = verify_rephrase(cand, self.SOURCE, self._store())
+        self.assertFalse(r.ok)
+        self.assertIn("citations_dropped", {v.kind for v in r.violations})
+
+    def test_a_plain_fact_store_check_accepts_all_of_these(self):
+        """
+        The point of the differential: on the fact store alone every one of
+        these is clean, which is why the comparison exists.
+        """
+        store = self._store()
+        for cand in ("Mortality is roughly a third.",
+                     "Estimated mortality 34.0%. Hold nephrotoxic agents."):
+            self.assertTrue(verify_text(cand, store).ok, cand)
 
 
 def test_an_age_is_written_the_way_it_is_spoken():

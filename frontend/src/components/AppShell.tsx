@@ -34,10 +34,10 @@ export function AppShell() {
           ))}
         </nav>
 
-        <p className={s.notice}>
+        {/* <p className={s.notice}>
           Localhost, no authentication. Not for real patient data. This instance
           is a demonstration over de-identified MIMIC-IV.
-        </p>
+        </p> */}
       </aside>
 
       <main className={s.main}>
