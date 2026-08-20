@@ -43,6 +43,9 @@ SHAP explainability & What-If Counterfactual Simulation
 Evidence retrieval - curated guideline corpus (KDIGO, ACC/AHA, SSC…)
         │
         ▼
+Mechanistic Medication Linking (RxNorm + clinical rules)
+        │
+        ▼
 Deterministic report composition (grounded by construction)
         │
         ▼
