@@ -30,11 +30,14 @@ Multi-task risk models (LightGBM/XGBoost, calibrated, from first 24h)
   ├── In-hospital mortality         (AUROC 0.9442)
   ├── 30-day readmission            (AUROC 0.7062)
   ├── ICU admission                 (AUROC 0.9209)
-  ├── Length of stay (two-stage)     (AUROC 0.8997)
+  ├── Length of stay (two-stage)    (AUROC 0.8997)
   └── Clinical deterioration 48h    (AUROC 0.7858)
         │
         ▼
-SHAP explainability - which inputs drove each score
+Patient Similarity Projection (32-d Hybrid Autoencoder)
+        │
+        ▼
+SHAP explainability & What-If Counterfactual Simulation
         │
         ▼
 Evidence retrieval - curated guideline corpus (KDIGO, ACC/AHA, SSC…)
@@ -296,6 +299,22 @@ sequenceDiagram
     M-->>BE: {baseline: {...}, modified: {...}, deltas: {...}}
     BE-->>C: JSON with before/after probabilities + drivers
 ```
+
+---
+
+## Deep Dive: Specialized Capabilities
+
+### 1. Phase 6: Sequence vs. Tabular Modeling
+Phase 6 evaluated PyTorch sequential models (LSTM/GRU and Transformer Encoders) trained on multi-event 24-hour clinical trajectories (`time_series.parquet`). While these models captured minute-level vital trend analysis, the tabular LightGBM baseline proved superior (AUPRC **0.3800** vs **0.3569** for sequence models). Event ordering did not add sufficient signal beyond what 24-hour summary statistics already captured, making the GBDT baselines the clear production choice due to their accuracy and significantly lower serving cost.
+
+### 2. Phase 7: Patient Similarity Embeddings
+To provide historical context, Phase 7 trained five variants of patient autoencoders to map admissions into a latent representation space. The **32-dimensional Dual-Head Hybrid Autoencoder** won the evaluation, enabling similarity-based retrieval of "patients like this one" from the historical cohort (improving ranking AUROC by +0.0734 over raw features). To avoid dragging a massive PyTorch dependency into the production serving layer, the forward pass was reimplemented entirely in NumPy (`twin_projection.py`).
+
+### 3. RAG Medication & Mechanistic Linking
+The `rag_corpus.py` engine evaluates the mechanistic relevance of every medication on a patient's list. It maps ingredients to drug classes (e.g., `lisinopril` → `ace_inhibitor`) and evaluates them against a curated `CLASS_RULES` engine (e.g., is a vasopressor supported by a MAP < 65 or a sepsis diagnosis?). Medications with a matching indication or physiological support score highly and are cited with reasons; drugs without an acute mechanistic link (like chronic statins) receive a neutral score. Unrecognized strings fall back to an RxNorm API search.
+
+### 4. What-If Counterfactual Simulation
+The `LiveModelRunner` supports physiological state counterfactual analysis. Clinicians can ask "what if" questions (e.g., "what if we lower their BP to 110?"). The system duplicates the patient payload, applies the modifications, and runs the entire inference pipeline—including SHAP feature attribution—on both branches simultaneously. The returned deltas allow clinicians to explore hypothetical patient trajectories and understand exactly which risk drivers would shift.
 
 ---
 
